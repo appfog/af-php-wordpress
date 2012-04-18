@@ -30,7 +30,7 @@
 
 			<div id="site-generator">
 				<?php do_action( 'twentyten_credits' ); ?>
-				<a href="<?php echo esc_url( __( 'http://wordpress.org/', 'twentyten' ) ); ?>" title="<?php esc_attr_e( 'Semantic Personal Publishing Platform', 'twentyten' ); ?>" rel="generator"><?php printf( __( 'Proudly powered by %s.', 'twentyten' ), 'WordPress' ); ?></a>
+				<a href="<?php echo esc_url( __( 'http://appfog.com/', 'twentyten' ) ); ?>" title="<?php esc_attr_e( 'Best PaaS', 'twentyten' ); ?>" rel="generator"><?php printf( __( 'Proudly powered by %s.', 'twentyten' ), 'AppFog' ); ?></a>
 			</div><!-- #site-generator -->
 
 		</div><!-- #colophon -->
