@@ -44,10 +44,13 @@ define('WP_DEBUG', false);
 require_once(ABSPATH . WPINC . '/load.php');
 require_once(ABSPATH . WPINC . '/version.php');
 wp_check_php_mysql_versions();
+wp_unregister_GLOBALS();
 
 require_once(ABSPATH . WPINC . '/compat.php');
 require_once(ABSPATH . WPINC . '/functions.php');
 require_once(ABSPATH . WPINC . '/class-wp-error.php');
+require_once(ABSPATH . WPINC . '/formatting.php');
+wp_magic_quotes();
 
 if (!file_exists(ABSPATH . 'wp-config-sample.php'))
 	wp_die('Sorry, I need a wp-config-sample.php file to work from. Please re-upload this file from your WordPress installation.');
@@ -78,7 +81,7 @@ else
 function display_header() {
 	header( 'Content-Type: text/html; charset=utf-8' );
 ?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
@@ -130,7 +133,7 @@ switch($step) {
 		<tr>
 			<th scope="row"><label for="pwd">Password</label></th>
 			<td><input name="pwd" id="pwd" type="text" size="25" value="password" /></td>
-			<td>...and MySQL password.</td>
+			<td>...and your MySQL password.</td>
 		</tr>
 		<tr>
 			<th scope="row"><label for="dbhost">Database Host</label></th>
@@ -139,7 +142,7 @@ switch($step) {
 		</tr>
 		<tr>
 			<th scope="row"><label for="prefix">Table Prefix</label></th>
-			<td><input name="prefix" id="prefix" type="text" id="prefix" value="wp_" size="25" /></td>
+			<td><input name="prefix" id="prefix" type="text" value="wp_" size="25" /></td>
 			<td>If you want to run multiple WordPress installations in a single database, change this.</td>
 		</tr>
 	</table>
