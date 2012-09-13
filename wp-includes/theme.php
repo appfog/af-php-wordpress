@@ -381,7 +381,7 @@ function search_theme_directories( $force = false ) {
 				if ( ! $sub_dirs )
 					return false;
 				foreach ( $sub_dirs as $sub_dir ) {
-					if ( ! is_dir( $theme_root . '/' . $dir ) || $dir[0] == '.' || $dir == 'CVS' )
+					if ( ! is_dir( $theme_root . '/' . $dir . '/' . $sub_dir ) || $dir[0] == '.' || $dir == 'CVS' )
 						continue;
 					if ( ! file_exists( $theme_root . '/' . $dir . '/' . $sub_dir . '/style.css' ) )
 						continue;
@@ -1629,11 +1629,12 @@ add_action( 'admin_enqueue_scripts', '_wp_customize_loader_settings' );
  * @since 3.4.0
  *
  * @param string $stylesheet Optional. Theme to customize. Defaults to current theme.
+ * 	The theme's stylesheet will be urlencoded if necessary.
  */
 function wp_customize_url( $stylesheet = null ) {
 	$url = admin_url( 'customize.php' );
 	if ( $stylesheet )
-		$url .= '?theme=' . $stylesheet;
+		$url .= '?theme=' . urlencode( $stylesheet );
 	return esc_url( $url );
 }
 

@@ -794,7 +794,7 @@ final class WP_Theme implements ArrayAccess {
 	 * @return string URL to the stylesheet directory.
 	 */
 	public function get_stylesheet_directory_uri() {
-		return $this->get_theme_root_uri() . '/' . $this->stylesheet;
+		return $this->get_theme_root_uri() . '/' . str_replace( '%2F', '/', rawurlencode( $this->stylesheet ) );
 	}
 
 	/**
@@ -814,7 +814,7 @@ final class WP_Theme implements ArrayAccess {
 		else
 			$theme_root_uri = $this->get_theme_root_uri();
 
-		return $theme_root . '/' . $this->template;
+		return $theme_root_uri . '/' . str_replace( '%2F', '/', rawurlencode( $this->template ) );
 	}
 
 	/**
@@ -930,10 +930,9 @@ final class WP_Theme implements ArrayAccess {
 			$files = (array) $this->get_files( 'php', 1 );
 
 			foreach ( $files as $file => $full_path ) {
-				$headers = get_file_data( $full_path, array( 'Template Name' => 'Template Name' ) );
-				if ( empty( $headers['Template Name'] ) )
+				if ( ! preg_match( '|Template Name:(.*)$|mi', file_get_contents( $full_path ), $header ) )
 					continue;
-				$page_templates[ $file ] = $headers['Template Name'];
+				$page_templates[ $file ] = _cleanup_header_comment( $header[1] );
 			}
 
 			$this->cache_add( 'page_templates', $page_templates );
@@ -1072,7 +1071,8 @@ final class WP_Theme implements ArrayAccess {
 	 * @return array Array of stylesheet names.
 	 */
 	public static function get_allowed( $blog_id = null ) {
-		return self::get_allowed_on_network() + self::get_allowed_on_site( $blog_id );
+		$network = (array) apply_filters( 'allowed_themes', self::get_allowed_on_network() );
+		return $network + self::get_allowed_on_site( $blog_id );
 	}
 
 	/**
