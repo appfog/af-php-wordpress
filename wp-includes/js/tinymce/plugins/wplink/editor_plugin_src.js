@@ -1,8 +1,10 @@
+/* global tinymce */
+
 (function() {
 	tinymce.create('tinymce.plugins.wpLink', {
 		/**
 		 * Initializes the plugin, this will be executed after the plugin has been created.
-		 * This call is done before the editor instance has finished it's initialization so use the onInit event
+		 * This call is done before the editor instance has finished its initialization so use the onInit event
 		 * of the editor instance to intercept that event.
 		 *
 		 * @param {tinymce.Editor} ed Editor instance that the plugin is initialized in.
@@ -18,7 +20,7 @@
 				ed.windowManager.open({
 					id : 'wp-link',
 					width : 480,
-					height : "auto",
+					height : 'auto',
 					wpDialog : true,
 					title : ed.getLang('advlink.link_desc')
 				}, {
@@ -28,11 +30,9 @@
 
 			// Register example button
 			ed.addButton('link', {
-				title : ed.getLang('advanced.link_desc'),
+				title : 'advanced.link_desc',
 				cmd : 'WP_Link'
 			});
-
-			ed.addShortcut('alt+shift+a', ed.getLang('advanced.link_desc'), 'WP_Link');
 
 			ed.onNodeChange.add(function(ed, cm, n, co) {
 				disabled = co && n.nodeName != 'A';
@@ -50,7 +50,7 @@
 				author : 'WordPress',
 				authorurl : 'http://wordpress.org',
 				infourl : '',
-				version : "1.0"
+				version : '1.0'
 			};
 		}
 	});
@@ -58,3 +58,4 @@
 	// Register plugin
 	tinymce.PluginManager.add('wplink', tinymce.plugins.wpLink);
 })();
+

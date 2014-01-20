@@ -89,7 +89,7 @@ function add_feed($feedname, $function) {
 		$wp_rewrite->feeds[] = $feedname;
 	$hook = 'do_feed_' . $feedname;
 	// Remove default function hook
-	remove_action($hook, $hook, 10, 1);
+	remove_action($hook, $hook);
 	add_action($hook, $function, 10, 1);
 	return $hook;
 }
@@ -207,11 +207,18 @@ define('EP_AUTHORS', 2048);
 define('EP_PAGES', 4096);
 
 /**
+ * Endpoint Mask for all archive views.
+ *
+ * @since 3.7.0
+ */
+define( 'EP_ALL_ARCHIVES', EP_DATE | EP_YEAR | EP_MONTH | EP_DAY | EP_CATEGORIES | EP_TAGS | EP_AUTHORS );
+
+/**
  * Endpoint Mask for everything.
  *
  * @since 2.1.0
  */
-define('EP_ALL', 8191);
+define( 'EP_ALL', EP_PERMALINK | EP_ATTACHMENT | EP_ROOT | EP_COMMENTS | EP_SEARCH | EP_PAGES | EP_ALL_ARCHIVES );
 
 /**
  * Add an endpoint, like /trackback/.
@@ -315,22 +322,28 @@ function url_to_postid($url) {
 
 	// Strip 'index.php/' if we're not using path info permalinks
 	if ( !$wp_rewrite->using_index_permalinks() )
-		$url = str_replace('index.php/', '', $url);
+		$url = str_replace( $wp_rewrite->index . '/', '', $url );
 
-	if ( false !== strpos($url, home_url()) ) {
-		// Chop off http://domain.com
+	if ( false !== strpos( trailingslashit( $url ), home_url( '/' ) ) ) {
+		// Chop off http://domain.com/[path]
 		$url = str_replace(home_url(), '', $url);
 	} else {
 		// Chop off /path/to/blog
-		$home_path = parse_url(home_url());
+		$home_path = parse_url( home_url( '/' ) );
 		$home_path = isset( $home_path['path'] ) ? $home_path['path'] : '' ;
-		$url = str_replace($home_path, '', $url);
+		$url = preg_replace( sprintf( '#^%s#', preg_quote( $home_path ) ), '', trailingslashit( $url ) );
 	}
 
 	// Trim leading and lagging slashes
 	$url = trim($url, '/');
 
 	$request = $url;
+	$post_type_query_vars = array();
+
+	foreach ( get_post_types( array() , 'objects' ) as $post_type => $t ) {
+		if ( ! empty( $t->query_var ) )
+			$post_type_query_vars[ $t->query_var ] = $post_type;
+	}
 
 	// Look for matches.
 	$request_match = $request;
@@ -358,16 +371,21 @@ function url_to_postid($url) {
 
 			// Filter out non-public query vars
 			global $wp;
-			parse_str($query, $query_vars);
+			parse_str( $query, $query_vars );
 			$query = array();
 			foreach ( (array) $query_vars as $key => $value ) {
-				if ( in_array($key, $wp->public_query_vars) )
+				if ( in_array( $key, $wp->public_query_vars ) ){
 					$query[$key] = $value;
+					if ( isset( $post_type_query_vars[$key] ) ) {
+						$query['post_type'] = $post_type_query_vars[$key];
+						$query['name'] = $value;
+					}
+				}
 			}
 
 			// Do the query
-			$query = new WP_Query($query);
-			if ( !empty($query->posts) && $query->is_singular )
+			$query = new WP_Query( $query );
+			if ( ! empty( $query->posts ) && $query->is_singular )
 				return $query->post->ID;
 			else
 				return 0;
@@ -822,7 +840,8 @@ class WP_Rewrite {
 		global $wpdb;
 
 		//get pages in order of hierarchy, i.e. children after parents
-		$posts = get_page_hierarchy( $wpdb->get_results("SELECT ID, post_name, post_parent FROM $wpdb->posts WHERE post_type = 'page' AND post_status != 'auto-draft'") );
+		$pages = $wpdb->get_results("SELECT ID, post_name, post_parent FROM $wpdb->posts WHERE post_type = 'page' AND post_status != 'auto-draft'");
+		$posts = get_page_hierarchy( $pages );
 
 		// If we have no pages get out quick
 		if ( !$posts )
@@ -1435,8 +1454,8 @@ class WP_Rewrite {
 					if ( !empty($endpoints) ) {
 						foreach ( (array) $ep_query_append as $regex => $ep ) {
 							if ( $ep[0] & EP_ATTACHMENT ) {
-								$rewrite[$sub1 . $regex] = $subquery . $ep[1] . $this->preg_index(2);
-								$rewrite[$sub2 . $regex] = $subquery . $ep[1] . $this->preg_index(2);
+								$rewrite[$sub1 . $regex] = $subquery . $ep[1] . $this->preg_index(3);
+								$rewrite[$sub2 . $regex] = $subquery . $ep[1] . $this->preg_index(3);
 							}
 						}
 					}
@@ -1525,8 +1544,11 @@ class WP_Rewrite {
 		$home_path = parse_url( home_url() );
 		$robots_rewrite = ( empty( $home_path['path'] ) || '/' == $home_path['path'] ) ? array( 'robots\.txt$' => $this->index . '?robots=1' ) : array();
 
-		// Old feed files
-		$old_feed_files = array( '.*wp-(atom|rdf|rss|rss2|feed|commentsrss2)\.php$' => $this->index . '?feed=old' );
+		// Old feed and service files
+		$deprecated_files = array(
+			'.*wp-(atom|rdf|rss|rss2|feed|commentsrss2)\.php$' => $this->index . '?feed=old',
+			'.*wp-app\.php(/.*)?$' => $this->index . '?error=403',
+		);
 
 		// Registration rules
 		$registration_pages = array();
@@ -1549,7 +1571,7 @@ class WP_Rewrite {
 		$root_rewrite = apply_filters('root_rewrite_rules', $root_rewrite);
 
 		// Comments
-		$comments_rewrite = $this->generate_rewrite_rules($this->root . $this->comments_base, EP_COMMENTS, true, true, true, false);
+		$comments_rewrite = $this->generate_rewrite_rules($this->root . $this->comments_base, EP_COMMENTS, false, true, true, false);
 		$comments_rewrite = apply_filters('comments_rewrite_rules', $comments_rewrite);
 
 		// Search
@@ -1585,9 +1607,9 @@ class WP_Rewrite {
 
 		// Put them together.
 		if ( $this->use_verbose_page_rules )
-			$this->rules = array_merge($this->extra_rules_top, $robots_rewrite, $old_feed_files, $registration_pages, $root_rewrite, $comments_rewrite, $search_rewrite,  $author_rewrite, $date_rewrite, $page_rewrite, $post_rewrite, $this->extra_rules);
+			$this->rules = array_merge($this->extra_rules_top, $robots_rewrite, $deprecated_files, $registration_pages, $root_rewrite, $comments_rewrite, $search_rewrite,  $author_rewrite, $date_rewrite, $page_rewrite, $post_rewrite, $this->extra_rules);
 		else
-			$this->rules = array_merge($this->extra_rules_top, $robots_rewrite, $old_feed_files, $registration_pages, $root_rewrite, $comments_rewrite, $search_rewrite,  $author_rewrite, $date_rewrite, $post_rewrite, $page_rewrite, $this->extra_rules);
+			$this->rules = array_merge($this->extra_rules_top, $robots_rewrite, $deprecated_files, $registration_pages, $root_rewrite, $comments_rewrite, $search_rewrite,  $author_rewrite, $date_rewrite, $post_rewrite, $page_rewrite, $this->extra_rules);
 
 		do_action_ref_array('generate_rewrite_rules', array(&$this));
 		$this->rules = apply_filters('rewrite_rules_array', $this->rules);
@@ -1638,7 +1660,7 @@ class WP_Rewrite {
 		if ( ! $this->using_permalinks() )
 			return '';
 
-		$site_root = parse_url(get_option('siteurl'));
+		$site_root = parse_url( site_url() );
 		if ( isset( $site_root['path'] ) )
 			$site_root = trailingslashit($site_root['path']);
 
@@ -1726,75 +1748,17 @@ class WP_Rewrite {
 		<rewrite>
 			<rules>';
 		}
-		if ( !is_multisite() ) {
-			$rules .= '
-				<rule name="wordpress" patternSyntax="Wildcard">
-					<match url="*" />
-						<conditions>
-							<add input="{REQUEST_FILENAME}" matchType="IsFile" negate="true" />
-							<add input="{REQUEST_FILENAME}" matchType="IsDirectory" negate="true" />
-						</conditions>
-					<action type="Rewrite" url="index.php" />
-				</rule>';
-		} else {
-			if (is_subdomain_install()) {
-				$rules .= '
-				<rule name="wordpress - Rule 1" stopProcessing="true">
-					<match url="^index\.php$" ignoreCase="false" />
-					<action type="None" />
-				</rule>
-				<rule name="wordpress - Rule 2" stopProcessing="true">
-					<match url="^files/(.+)" ignoreCase="false" />
-					<action type="Rewrite" url="wp-includes/ms-files.php?file={R:1}" appendQueryString="false" />
-				</rule>
-				<rule name="wordpress - Rule 3" stopProcessing="true">
-					<match url="^" ignoreCase="false" />
-					<conditions logicalGrouping="MatchAny">
-						<add input="{REQUEST_FILENAME}" matchType="IsFile" ignoreCase="false" />
-						<add input="{REQUEST_FILENAME}" matchType="IsDirectory" ignoreCase="false" />
+
+		$rules .= '
+			<rule name="wordpress" patternSyntax="Wildcard">
+				<match url="*" />
+					<conditions>
+						<add input="{REQUEST_FILENAME}" matchType="IsFile" negate="true" />
+						<add input="{REQUEST_FILENAME}" matchType="IsDirectory" negate="true" />
 					</conditions>
-					<action type="None" />
-				</rule>
-				<rule name="wordpress - Rule 4" stopProcessing="true">
-					<match url="." ignoreCase="false" />
-					<action type="Rewrite" url="index.php" />
-				</rule>';
-			} else {
-				$rules .= '
-				<rule name="wordpress - Rule 1" stopProcessing="true">
-					<match url="^index\.php$" ignoreCase="false" />
-					<action type="None" />
-				</rule>
-				<rule name="wordpress - Rule 2" stopProcessing="true">
-					<match url="^([_0-9a-zA-Z-]+/)?files/(.+)" ignoreCase="false" />
-					<action type="Rewrite" url="wp-includes/ms-files.php?file={R:2}" appendQueryString="false" />
-				</rule>
-				<rule name="wordpress - Rule 3" stopProcessing="true">
-					<match url="^([_0-9a-zA-Z-]+/)?wp-admin$" ignoreCase="false" />
-					<action type="Redirect" url="{R:1}wp-admin/" redirectType="Permanent" />
-				</rule>
-				<rule name="wordpress - Rule 4" stopProcessing="true">
-					<match url="^" ignoreCase="false" />
-					<conditions logicalGrouping="MatchAny">
-						<add input="{REQUEST_FILENAME}" matchType="IsFile" ignoreCase="false" />
-						<add input="{REQUEST_FILENAME}" matchType="IsDirectory" ignoreCase="false" />
-					</conditions>
-					<action type="None" />
-				</rule>
-				<rule name="wordpress - Rule 5" stopProcessing="true">
-					<match url="^([_0-9a-zA-Z-]+/)?(wp-(content|admin|includes).*)" ignoreCase="false" />
-					<action type="Rewrite" url="{R:1}" />
-				</rule>
-				<rule name="wordpress - Rule 6" stopProcessing="true">
-					<match url="^([_0-9a-zA-Z-]+/)?(.*\.php)$" ignoreCase="false" />
-					<action type="Rewrite" url="{R:2}" />
-				</rule>
-				<rule name="wordpress - Rule 7" stopProcessing="true">
-					<match url="." ignoreCase="false" />
-					<action type="Rewrite" url="index.php" />
-				</rule>';
-			}
-		}
+				<action type="Rewrite" url="index.php" />
+			</rule>';
+
 		if ( $add_parent_tags ) {
 			$rules .= '
 			</rules>
@@ -1940,9 +1904,19 @@ class WP_Rewrite {
 	function flush_rules($hard = true) {
 		delete_option('rewrite_rules');
 		$this->wp_rewrite_rules();
-		if ( $hard && function_exists('save_mod_rewrite_rules') )
+		/**
+		 * Filter whether a "hard" rewrite rule flush should be performed when requested.
+		 *
+		 * A "hard" flush updates .htaccess (Apache) or web.config (IIS).
+		 *
+		 * @since 3.7.0
+		 * @param bool $hard Defaults to true.
+		 */
+		if ( ! $hard || ! apply_filters( 'flush_rewrite_rules_hard', true ) )
+			return;
+		if ( function_exists( 'save_mod_rewrite_rules' ) )
 			save_mod_rewrite_rules();
-		if ( $hard && function_exists('iis7_save_url_rewrite_rules') )
+		if ( function_exists( 'iis7_save_url_rewrite_rules' ) )
 			iis7_save_url_rewrite_rules();
 	}
 
@@ -1995,9 +1969,10 @@ class WP_Rewrite {
 	 */
 	function set_permalink_structure($permalink_structure) {
 		if ( $permalink_structure != $this->permalink_structure ) {
+			$old_permalink_structure = $this->permalink_structure;
 			update_option('permalink_structure', $permalink_structure);
 			$this->init();
-			do_action('permalink_structure_changed', $this->permalink_structure, $permalink_structure);
+			do_action('permalink_structure_changed', $old_permalink_structure, $permalink_structure);
 		}
 	}
 

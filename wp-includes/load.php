@@ -27,7 +27,6 @@ function wp_unregister_GLOBALS() {
 	$input = array_merge( $_GET, $_POST, $_COOKIE, $_SERVER, $_ENV, $_FILES, isset( $_SESSION ) && is_array( $_SESSION ) ? $_SESSION : array() );
 	foreach ( $input as $k => $v )
 		if ( !in_array( $k, $no_unset ) && isset( $GLOBALS[$k] ) ) {
-			$GLOBALS[$k] = null;
 			unset( $GLOBALS[$k] );
 		}
 }
@@ -254,17 +253,14 @@ function timer_stop( $display = 0, $precision = 3 ) { // if called like timer_st
  * When WP_DEBUG_LOG is true, errors will be logged to wp-content/debug.log.
  * WP_DEBUG_LOG defaults to false.
  *
+ * Errors are never displayed for XML-RPC requests.
+ *
  * @access private
  * @since 3.0.0
  */
 function wp_debug_mode() {
 	if ( WP_DEBUG ) {
-		// E_DEPRECATED is a core PHP constant in PHP 5.3. Don't define this yourself.
-		// The two statements are equivalent, just one is for 5.3+ and for less than 5.3.
-		if ( defined( 'E_DEPRECATED' ) )
-			error_reporting( E_ALL & ~E_DEPRECATED & ~E_STRICT );
-		else
-			error_reporting( E_ALL );
+		error_reporting( E_ALL );
 
 		if ( WP_DEBUG_DISPLAY )
 			ini_set( 'display_errors', 1 );
@@ -278,6 +274,8 @@ function wp_debug_mode() {
 	} else {
 		error_reporting( E_CORE_ERROR | E_CORE_WARNING | E_COMPILE_ERROR | E_ERROR | E_WARNING | E_PARSE | E_USER_ERROR | E_USER_WARNING | E_RECOVERABLE_ERROR );
 	}
+	if ( defined( 'XMLRPC_REQUEST' ) )
+		ini_set( 'display_errors', 0 );
 }
 
 /**
@@ -356,7 +354,7 @@ function wp_set_wpdb_vars() {
 		dead_db();
 
 	$wpdb->field_types = array( 'post_author' => '%d', 'post_parent' => '%d', 'menu_order' => '%d', 'term_id' => '%d', 'term_group' => '%d', 'term_taxonomy_id' => '%d',
-		'parent' => '%d', 'count' => '%d','object_id' => '%d', 'term_order' => '%d', 'ID' => '%d', 'commment_ID' => '%d', 'comment_post_ID' => '%d', 'comment_parent' => '%d',
+		'parent' => '%d', 'count' => '%d','object_id' => '%d', 'term_order' => '%d', 'ID' => '%d', 'comment_ID' => '%d', 'comment_post_ID' => '%d', 'comment_parent' => '%d',
 		'user_id' => '%d', 'link_id' => '%d', 'link_owner' => '%d', 'link_rating' => '%d', 'option_id' => '%d', 'blog_id' => '%d', 'meta_id' => '%d', 'post_id' => '%d',
 		'user_status' => '%d', 'umeta_id' => '%d', 'comment_karma' => '%d', 'comment_count' => '%d',
 		// multisite:
@@ -372,6 +370,24 @@ function wp_set_wpdb_vars() {
 }
 
 /**
+ * Access/Modify private global variable $_wp_using_ext_object_cache
+ *
+ * Toggle $_wp_using_ext_object_cache on and off without directly touching global
+ *
+ * @since 3.7.0
+ *
+ * @param bool $using Whether external object cache is being used
+ * @return bool The current 'using' setting
+ */
+function wp_using_ext_object_cache( $using = null ) {
+	global $_wp_using_ext_object_cache;
+	$current_using = $_wp_using_ext_object_cache;
+	if ( null !== $using )
+		$_wp_using_ext_object_cache = $using;
+	return $current_using;
+}
+
+/**
  * Starts the WordPress object cache.
  *
  * If an object-cache.php file exists in the wp-content directory,
@@ -381,35 +397,37 @@ function wp_set_wpdb_vars() {
  * @since 3.0.0
  */
 function wp_start_object_cache() {
-	global $_wp_using_ext_object_cache;
+	global $blog_id;
 
 	$first_init = false;
  	if ( ! function_exists( 'wp_cache_init' ) ) {
 		if ( file_exists( WP_CONTENT_DIR . '/object-cache.php' ) ) {
 			require_once ( WP_CONTENT_DIR . '/object-cache.php' );
-			$_wp_using_ext_object_cache = true;
-		} else {
-			require_once ( ABSPATH . WPINC . '/cache.php' );
-			$_wp_using_ext_object_cache = false;
+			if ( function_exists( 'wp_cache_init' ) )
+				wp_using_ext_object_cache( true );
 		}
+
 		$first_init = true;
-	} else if ( !$_wp_using_ext_object_cache && file_exists( WP_CONTENT_DIR . '/object-cache.php' ) ) {
+	} else if ( ! wp_using_ext_object_cache() && file_exists( WP_CONTENT_DIR . '/object-cache.php' ) ) {
 		// Sometimes advanced-cache.php can load object-cache.php before it is loaded here.
 		// This breaks the function_exists check above and can result in $_wp_using_ext_object_cache
 		// being set incorrectly. Double check if an external cache exists.
-		$_wp_using_ext_object_cache = true;
+		wp_using_ext_object_cache( true );
 	}
+
+	if ( ! wp_using_ext_object_cache() )
+		require_once ( ABSPATH . WPINC . '/cache.php' );
 
 	// If cache supports reset, reset instead of init if already initialized.
 	// Reset signals to the cache that global IDs have changed and it may need to update keys
 	// and cleanup caches.
-	if ( !$first_init && function_exists('wp_cache_reset') )
-		wp_cache_reset();
-	else
+	if ( ! $first_init && function_exists( 'wp_cache_switch_to_blog' ) )
+		wp_cache_switch_to_blog( $blog_id );
+	elseif ( function_exists( 'wp_cache_init' ) )
 		wp_cache_init();
 
 	if ( function_exists( 'wp_cache_add_global_groups' ) ) {
-		wp_cache_add_global_groups( array( 'users', 'userlogins', 'usermeta', 'user_meta', 'site-transient', 'site-options', 'site-lookup', 'blog-lookup', 'blog-details', 'rss', 'global-posts' ) );
+		wp_cache_add_global_groups( array( 'users', 'userlogins', 'usermeta', 'user_meta', 'site-transient', 'site-options', 'site-lookup', 'blog-lookup', 'blog-details', 'rss', 'global-posts', 'blog-id-cache' ) );
 		wp_cache_add_non_persistent_groups( array( 'comment', 'counts', 'plugins' ) );
 	}
 }
@@ -427,12 +445,12 @@ function wp_not_installed() {
 		if ( ! is_blog_installed() && ! defined( 'WP_INSTALLING' ) )
 			wp_die( __( 'The site you have requested is not installed properly. Please contact the system administrator.' ) );
 	} elseif ( ! is_blog_installed() && false === strpos( $_SERVER['PHP_SELF'], 'install.php' ) && !defined( 'WP_INSTALLING' ) ) {
-
-		$link = wp_guess_url() . '/wp-admin/install.php';
-
 		require( ABSPATH . WPINC . '/kses.php' );
 		require( ABSPATH . WPINC . '/pluggable.php' );
 		require( ABSPATH . WPINC . '/formatting.php' );
+
+		$link = wp_guess_url() . '/wp-admin/install.php';
+
 		wp_redirect( $link );
 		die();
 	}
@@ -514,7 +532,8 @@ function wp_get_active_and_valid_plugins() {
  */
 function wp_set_internal_encoding() {
 	if ( function_exists( 'mb_internal_encoding' ) ) {
-		if ( !@mb_internal_encoding( get_option( 'blog_charset' ) ) )
+		$charset = get_option( 'blog_charset' );
+		if ( ! $charset || ! @mb_internal_encoding( $charset ) )
 			mb_internal_encoding( 'UTF-8' );
 	}
 }
@@ -553,6 +572,11 @@ function wp_magic_quotes() {
  * @since 1.2.0
  */
 function shutdown_action_hook() {
+	/**
+	 * Fires just before PHP shuts down execution.
+	 *
+	 * @since 1.2.0
+	 */
 	do_action( 'shutdown' );
 	wp_cache_close();
 }
@@ -583,8 +607,11 @@ function wp_clone( $object ) {
  * @return bool True if inside WordPress administration pages.
  */
 function is_admin() {
-	if ( defined( 'WP_ADMIN' ) )
+	if ( isset( $GLOBALS['current_screen'] ) )
+		return $GLOBALS['current_screen']->in_admin();
+	elseif ( defined( 'WP_ADMIN' ) )
 		return WP_ADMIN;
+
 	return false;
 }
 
@@ -599,8 +626,11 @@ function is_admin() {
  * @return bool True if inside WordPress network administration pages.
  */
 function is_blog_admin() {
-	if ( defined( 'WP_BLOG_ADMIN' ) )
+	if ( isset( $GLOBALS['current_screen'] ) )
+		return $GLOBALS['current_screen']->in_admin( 'site' );
+	elseif ( defined( 'WP_BLOG_ADMIN' ) )
 		return WP_BLOG_ADMIN;
+
 	return false;
 }
 
@@ -615,8 +645,11 @@ function is_blog_admin() {
  * @return bool True if inside WordPress network administration pages.
  */
 function is_network_admin() {
-	if ( defined( 'WP_NETWORK_ADMIN' ) )
+	if ( isset( $GLOBALS['current_screen'] ) )
+		return $GLOBALS['current_screen']->in_admin( 'network' );
+	elseif ( defined( 'WP_NETWORK_ADMIN' ) )
 		return WP_NETWORK_ADMIN;
+
 	return false;
 }
 
@@ -631,8 +664,11 @@ function is_network_admin() {
  * @return bool True if inside WordPress user administration pages.
  */
 function is_user_admin() {
-	if ( defined( 'WP_USER_ADMIN' ) )
+	if ( isset( $GLOBALS['current_screen'] ) )
+		return $GLOBALS['current_screen']->in_admin( 'user' );
+	elseif ( defined( 'WP_USER_ADMIN' ) )
 		return WP_USER_ADMIN;
+
 	return false;
 }
 
@@ -651,6 +687,18 @@ function is_multisite() {
 		return true;
 
 	return false;
+}
+
+/**
+ * Retrieve the current blog id
+ *
+ * @since 3.1.0
+ *
+ * @return int Blog id
+ */
+function get_current_blog_id() {
+	global $blog_id;
+	return absint($blog_id);
 }
 
 /**

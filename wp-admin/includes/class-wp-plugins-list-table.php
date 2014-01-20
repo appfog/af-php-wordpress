@@ -9,21 +9,22 @@
  */
 class WP_Plugins_List_Table extends WP_List_Table {
 
-	function __construct() {
+	function __construct( $args = array() ) {
 		global $status, $page;
+
+		parent::__construct( array(
+			'plural' => 'plugins',
+			'screen' => isset( $args['screen'] ) ? $args['screen'] : null,
+		) );
 
 		$status = 'all';
 		if ( isset( $_REQUEST['plugin_status'] ) && in_array( $_REQUEST['plugin_status'], array( 'active', 'inactive', 'recently_activated', 'upgrade', 'mustuse', 'dropins', 'search' ) ) )
 			$status = $_REQUEST['plugin_status'];
 
 		if ( isset($_REQUEST['s']) )
-			$_SERVER['REQUEST_URI'] = add_query_arg('s', stripslashes($_REQUEST['s']) );
+			$_SERVER['REQUEST_URI'] = add_query_arg('s', wp_unslash($_REQUEST['s']) );
 
 		$page = $this->get_pagenum();
-
-		parent::__construct( array(
-			'plural' => 'plugins',
-		) );
 	}
 
 	function get_table_classes() {
@@ -31,13 +32,6 @@ class WP_Plugins_List_Table extends WP_List_Table {
 	}
 
 	function ajax_user_can() {
-		if ( is_multisite() ) {
-			$menu_perms = get_site_option( 'menu_items', array() );
-
-			if ( empty( $menu_perms['plugins'] ) && ! is_super_admin() )
-				return false;
-		}
-
 		return current_user_can('activate_plugins');
 	}
 
@@ -57,9 +51,9 @@ class WP_Plugins_List_Table extends WP_List_Table {
 			'dropins' => array()
 		);
 
-		$screen = get_current_screen();
+		$screen = $this->screen;
 
-		if ( ! is_multisite() || ( $screen->is_network && current_user_can('manage_network_plugins') ) ) {
+		if ( ! is_multisite() || ( $screen->in_admin( 'network' ) && current_user_can( 'manage_network_plugins' ) ) ) {
 			if ( apply_filters( 'show_advanced_plugins', true, 'mustuse' ) )
 				$plugins['mustuse'] = get_mu_plugins();
 			if ( apply_filters( 'show_advanced_plugins', true, 'dropins' ) )
@@ -76,29 +70,28 @@ class WP_Plugins_List_Table extends WP_List_Table {
 			}
 		}
 
-		set_transient( 'plugin_slugs', array_keys( $plugins['all'] ), 86400 );
+		set_transient( 'plugin_slugs', array_keys( $plugins['all'] ), DAY_IN_SECONDS );
 
-		if ( ! $screen->is_network ) {
+		if ( ! $screen->in_admin( 'network' ) ) {
 			$recently_activated = get_option( 'recently_activated', array() );
 
-			$one_week = 7*24*60*60;
 			foreach ( $recently_activated as $key => $time )
-				if ( $time + $one_week < time() )
+				if ( $time + WEEK_IN_SECONDS < time() )
 					unset( $recently_activated[$key] );
 			update_option( 'recently_activated', $recently_activated );
 		}
 
 		foreach ( (array) $plugins['all'] as $plugin_file => $plugin_data ) {
 			// Filter into individual sections
-			if ( is_multisite() && ! $screen->is_network && is_network_only_plugin( $plugin_file ) ) {
+			if ( is_multisite() && ! $screen->in_admin( 'network' ) && is_network_only_plugin( $plugin_file ) ) {
 				unset( $plugins['all'][ $plugin_file ] );
-			} elseif ( ! $screen->is_network && is_plugin_active_for_network( $plugin_file ) ) {
+			} elseif ( ! $screen->in_admin( 'network' ) && is_plugin_active_for_network( $plugin_file ) ) {
 				unset( $plugins['all'][ $plugin_file ] );
-			} elseif ( ( ! $screen->is_network && is_plugin_active( $plugin_file ) )
-				|| ( $screen->is_network && is_plugin_active_for_network( $plugin_file ) ) ) {
+			} elseif ( ( ! $screen->in_admin( 'network' ) && is_plugin_active( $plugin_file ) )
+				|| ( $screen->in_admin( 'network' ) && is_plugin_active_for_network( $plugin_file ) ) ) {
 				$plugins['active'][ $plugin_file ] = $plugin_data;
 			} else {
-				if ( !$screen->is_network && isset( $recently_activated[ $plugin_file ] ) ) // Was the plugin recently activated?
+				if ( ! $screen->in_admin( 'network' ) && isset( $recently_activated[ $plugin_file ] ) ) // Was the plugin recently activated?
 					$plugins['recently_activated'][ $plugin_file ] = $plugin_data;
 				$plugins['inactive'][ $plugin_file ] = $plugin_data;
 			}
@@ -106,7 +99,7 @@ class WP_Plugins_List_Table extends WP_List_Table {
 
 		if ( $s ) {
 			$status = 'search';
-			$plugins['search'] = array_filter( $plugins['all'], array( &$this, '_search_callback' ) );
+			$plugins['search'] = array_filter( $plugins['all'], array( $this, '_search_callback' ) );
 		}
 
 		$totals = array();
@@ -128,7 +121,7 @@ class WP_Plugins_List_Table extends WP_List_Table {
 			$orderby = ucfirst( $orderby );
 			$order = strtoupper( $order );
 
-			uasort( $this->items, array( &$this, '_order_callback' ) );
+			uasort( $this->items, array( $this, '_order_callback' ) );
 		}
 
 		$plugins_per_page = $this->get_items_per_page( str_replace( '-', '_', $screen->id . '_per_page' ), 999 );
@@ -147,7 +140,7 @@ class WP_Plugins_List_Table extends WP_List_Table {
 	function _search_callback( $plugin ) {
 		static $term;
 		if ( is_null( $term ) )
-			$term = stripslashes( $_REQUEST['s'] );
+			$term = wp_unslash( $_REQUEST['s'] );
 
 		foreach ( $plugin as $value )
 			if ( stripos( $value, $term ) !== false )
@@ -243,15 +236,13 @@ class WP_Plugins_List_Table extends WP_List_Table {
 
 		$actions = array();
 
-		$screen = get_current_screen();
-
 		if ( 'active' != $status )
-			$actions['activate-selected'] = $screen->is_network ? __( 'Network Activate' ) : __( 'Activate' );
+			$actions['activate-selected'] = $this->screen->in_admin( 'network' ) ? __( 'Network Activate' ) : __( 'Activate' );
 
 		if ( 'inactive' != $status && 'recent' != $status )
-			$actions['deactivate-selected'] = $screen->is_network ? __( 'Network Deactivate' ) : __( 'Deactivate' );
+			$actions['deactivate-selected'] = $this->screen->in_admin( 'network' ) ? __( 'Network Deactivate' ) : __( 'Deactivate' );
 
-		if ( !is_multisite() || $screen->is_network ) {
+		if ( !is_multisite() || $this->screen->in_admin( 'network' ) ) {
 			if ( current_user_can( 'update_plugins' ) )
 				$actions['update-selected'] = __( 'Update' );
 			if ( current_user_can( 'delete_plugins' ) && ( 'active' != $status ) )
@@ -261,13 +252,13 @@ class WP_Plugins_List_Table extends WP_List_Table {
 		return $actions;
 	}
 
-	function bulk_actions( $which ) {
+	function bulk_actions() {
 		global $status;
 
 		if ( in_array( $status, array( 'mustuse', 'dropins' ) ) )
 			return;
 
-		parent::bulk_actions( $which );
+		parent::bulk_actions();
 	}
 
 	function extra_tablenav( $which ) {
@@ -278,10 +269,8 @@ class WP_Plugins_List_Table extends WP_List_Table {
 
 		echo '<div class="alignleft actions">';
 
-		$screen = get_current_screen();
-
-		if ( ! $screen->is_network && 'recently_activated' == $status )
-			submit_button( __( 'Clear List' ), 'secondary', 'clear-recent-list', false );
+		if ( ! $this->screen->in_admin( 'network' ) && 'recently_activated' == $status )
+			submit_button( __( 'Clear List' ), 'button', 'clear-recent-list', false );
 		elseif ( 'top' == $which && 'mustuse' == $status )
 			echo '<p>' . sprintf( __( 'Files in the <code>%s</code> directory are executed automatically.' ), str_replace( ABSPATH, '/', WPMU_PLUGIN_DIR ) ) . '</p>';
 		elseif ( 'top' == $which && 'dropins' == $status )
@@ -300,21 +289,19 @@ class WP_Plugins_List_Table extends WP_List_Table {
 	function display_rows() {
 		global $status;
 
-		$screen = get_current_screen();
-
-		if ( is_multisite() && !$screen->is_network && in_array( $status, array( 'mustuse', 'dropins' ) ) )
+		if ( is_multisite() && ! $this->screen->in_admin( 'network' ) && in_array( $status, array( 'mustuse', 'dropins' ) ) )
 			return;
 
 		foreach ( $this->items as $plugin_file => $plugin_data )
-			$this->single_row( $plugin_file, $plugin_data );
+			$this->single_row( array( $plugin_file, $plugin_data ) );
 	}
 
-	function single_row( $plugin_file, $plugin_data ) {
+	function single_row( $item ) {
 		global $status, $page, $s, $totals;
 
+		list( $plugin_file, $plugin_data ) = $item;
 		$context = $status;
-
-		$screen = get_current_screen();
+		$screen = $this->screen;
 
 		// preorder
 		$actions = array(
@@ -334,7 +321,7 @@ class WP_Plugins_List_Table extends WP_List_Table {
 			if ( true === ( $dropins[ $plugin_file ][1] ) ) { // Doesn't require a constant
 				$is_active = true;
 				$description = '<p><strong>' . $dropins[ $plugin_file ][0] . '</strong></p>';
-			} elseif ( constant( $dropins[ $plugin_file ][1] ) ) { // Constant is true
+			} elseif ( defined( $dropins[ $plugin_file ][1] ) && constant( $dropins[ $plugin_file ][1] ) ) { // Constant is true
 				$is_active = true;
 				$description = '<p><strong>' . $dropins[ $plugin_file ][0] . '</strong></p>';
 			} else {
@@ -344,12 +331,12 @@ class WP_Plugins_List_Table extends WP_List_Table {
 			if ( $plugin_data['Description'] )
 				$description .= '<p>' . $plugin_data['Description'] . '</p>';
 		} else {
-			if ( $screen->is_network )
+			if ( $screen->in_admin( 'network' ) )
 				$is_active = is_plugin_active_for_network( $plugin_file );
 			else
 				$is_active = is_plugin_active( $plugin_file );
 
-			if ( $screen->is_network ) {
+			if ( $screen->in_admin( 'network' ) ) {
 				if ( $is_active ) {
 					if ( current_user_can( 'manage_network_plugins' ) )
 						$actions['deactivate'] = '<a href="' . wp_nonce_url('plugins.php?action=deactivate&amp;plugin=' . $plugin_file . '&amp;plugin_status=' . $context . '&amp;paged=' . $page . '&amp;s=' . $s, 'deactivate-plugin_' . $plugin_file) . '" title="' . esc_attr__('Deactivate this plugin') . '">' . __('Network Deactivate') . '</a>';
@@ -368,19 +355,24 @@ class WP_Plugins_List_Table extends WP_List_Table {
 					if ( ! is_multisite() && current_user_can('delete_plugins') )
 						$actions['delete'] = '<a href="' . wp_nonce_url('plugins.php?action=delete-selected&amp;checked[]=' . $plugin_file . '&amp;plugin_status=' . $context . '&amp;paged=' . $page . '&amp;s=' . $s, 'bulk-plugins') . '" title="' . esc_attr__('Delete this plugin') . '" class="delete">' . __('Delete') . '</a>';
 				} // end if $is_active
-			 } // end if $screen->is_network
+			 } // end if $screen->in_admin( 'network' )
 
-			if ( ( ! is_multisite() || $screen->is_network ) && current_user_can('edit_plugins') && is_writable(WP_PLUGIN_DIR . '/' . $plugin_file) )
+			if ( ( ! is_multisite() || $screen->in_admin( 'network' ) ) && current_user_can('edit_plugins') && is_writable(WP_PLUGIN_DIR . '/' . $plugin_file) )
 				$actions['edit'] = '<a href="plugin-editor.php?file=' . $plugin_file . '" title="' . esc_attr__('Open this file in the Plugin Editor') . '" class="edit">' . __('Edit') . '</a>';
 		} // end if $context
 
-		$prefix = $screen->is_network ? 'network_admin_' : '';
+		$prefix = $screen->in_admin( 'network' ) ? 'network_admin_' : '';
 		$actions = apply_filters( $prefix . 'plugin_action_links', array_filter( $actions ), $plugin_file, $plugin_data, $context );
 		$actions = apply_filters( $prefix . "plugin_action_links_$plugin_file", $actions, $plugin_file, $plugin_data, $context );
 
 		$class = $is_active ? 'active' : 'inactive';
 		$checkbox_id =  "checkbox_" . md5($plugin_data['Name']);
-		$checkbox = in_array( $status, array( 'mustuse', 'dropins' ) ) ? '' : "<input type='checkbox' name='checked[]' value='" . esc_attr( $plugin_file ) . "' id='" . $checkbox_id . "' /><label class='screen-reader-text' for='" . $checkbox_id . "' >" . __('Select') . " " . $plugin_data['Name'] . "</label>";
+		if ( in_array( $status, array( 'mustuse', 'dropins' ) ) ) {
+			$checkbox = '';
+		} else {
+			$checkbox = "<label class='screen-reader-text' for='" . $checkbox_id . "' >" . sprintf( __( 'Select %s' ), $plugin_data['Name'] ) . "</label>"
+				. "<input type='checkbox' name='checked[]' value='" . esc_attr( $plugin_file ) . "' id='" . $checkbox_id . "' />";
+		}
 		if ( 'dropins' != $context ) {
 			$description = '<p>' . ( $plugin_data['Description'] ? $plugin_data['Description'] : '&nbsp;' ) . '</p>';
 			$plugin_name = $plugin_data['Name'];

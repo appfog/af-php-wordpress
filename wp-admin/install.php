@@ -15,8 +15,8 @@ if ( false ) {
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 	<title>Error: PHP is not running</title>
 </head>
-<body>
-	<h1 id="logo"><img alt="WordPress" src="images/wordpress-logo.png?ver=20120216" /></h1>
+<body class="wp-core-ui">
+	<h1 id="logo"><a href="http://wordpress.org/">WordPress</a></h1>
 	<h2>Error: PHP is not running</h2>
 	<p>WordPress requires that your web server is running PHP. Your server does not have PHP installed, or PHP is turned off.</p>
 </body>
@@ -36,10 +36,10 @@ define( 'WP_INSTALLING', true );
 require_once( dirname( dirname( __FILE__ ) ) . '/wp-load.php' );
 
 /** Load WordPress Administration Upgrade API */
-require_once( dirname( __FILE__ ) . '/includes/upgrade.php' );
+require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
 
 /** Load wpdb */
-require_once(dirname(dirname(__FILE__)) . '/wp-includes/wp-db.php');
+require_once( ABSPATH . 'wp-includes/wp-db.php' );
 
 $step = isset( $_GET['step'] ) ? (int) $_GET['step'] : 0;
 
@@ -56,12 +56,15 @@ function display_header() {
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" <?php language_attributes(); ?>>
 <head>
+	<meta name="viewport" content="width=device-width" />
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 	<title><?php _e( 'WordPress &rsaquo; Installation' ); ?></title>
-	<?php wp_admin_css( 'install', true ); ?>
+	<?php
+	wp_admin_css( 'install', true );
+	?>
 </head>
-<body<?php if ( is_rtl() ) echo ' class="rtl"'; ?>>
-<h1 id="logo"><img alt="WordPress" src="images/wordpress-logo.png?ver=20120216" /></h1>
+<body class="wp-core-ui<?php if ( is_rtl() ) echo ' rtl'; ?>">
+<h1 id="logo"><a href="<?php echo esc_url( __( 'http://wordpress.org/' ) ); ?>"><?php _e( 'WordPress' ); ?></a></h1>
 
 <?php
 } // end display_header()
@@ -82,14 +85,14 @@ function display_setup_form( $error = null ) {
 	if ( ! empty( $_POST ) )
 		$blog_public = isset( $_POST['blog_public'] );
 
-	$weblog_title = isset( $_POST['weblog_title'] ) ? trim( stripslashes( $_POST['weblog_title'] ) ) : '';
-	$user_name = isset($_POST['user_name']) ? trim( stripslashes( $_POST['user_name'] ) ) : 'admin';
-	$admin_password = isset($_POST['admin_password']) ? trim( stripslashes( $_POST['admin_password'] ) ) : '';
-	$admin_email  = isset( $_POST['admin_email']  ) ? trim( stripslashes( $_POST['admin_email'] ) ) : '';
+	$weblog_title = isset( $_POST['weblog_title'] ) ? trim( wp_unslash( $_POST['weblog_title'] ) ) : '';
+	$user_name = isset($_POST['user_name']) ? trim( wp_unslash( $_POST['user_name'] ) ) : '';
+	$admin_password = isset($_POST['admin_password']) ? trim( wp_unslash( $_POST['admin_password'] ) ) : '';
+	$admin_email  = isset( $_POST['admin_email']  ) ? trim( wp_unslash( $_POST['admin_email'] ) ) : '';
 
 	if ( ! is_null( $error ) ) {
 ?>
-<p class="message"><?php printf( __( '<strong>ERROR</strong>: %s' ), $error ); ?></p>
+<p class="message"><?php echo $error; ?></p>
 <?php } ?>
 <form id="setup" method="post" action="install.php?step=2">
 	<table class="form-table">
@@ -98,7 +101,7 @@ function display_setup_form( $error = null ) {
 			<td><input name="weblog_title" type="text" id="weblog_title" size="25" value="<?php echo esc_attr( $weblog_title ); ?>" /></td>
 		</tr>
 		<tr>
-			<th scope="row"><label for="user_name"><?php _e('Username'); ?></label></th>
+			<th scope="row"><label for="user_login"><?php _e('Username'); ?></label></th>
 			<td>
 			<?php
 			if ( $user_table ) {
@@ -134,7 +137,7 @@ function display_setup_form( $error = null ) {
 			<td colspan="2"><label><input type="checkbox" name="blog_public" value="1" <?php checked( $blog_public ); ?> /> <?php _e( 'Allow search engines to index this site.' ); ?></label></td>
 		</tr>
 	</table>
-	<p class="step"><input type="submit" name="Submit" value="<?php esc_attr_e( 'Install WordPress' ); ?>" class="button" /></p>
+	<p class="step"><input type="submit" name="Submit" value="<?php esc_attr_e( 'Install WordPress' ); ?>" class="button button-large" /></p>
 </form>
 <?php
 } // end display_setup_form()
@@ -142,7 +145,7 @@ function display_setup_form( $error = null ) {
 // Let's check to make sure WP isn't already installed.
 if ( is_blog_installed() ) {
 	display_header();
-	die( '<h1>' . __( 'Already Installed' ) . '</h1><p>' . __( 'You appear to have already installed WordPress. To reinstall please clear your old database tables first.' ) . '</p><p class="step"><a href="../wp-login.php" class="button">' . __('Log In') . '</a></p></body></html>' );
+	die( '<h1>' . __( 'Already Installed' ) . '</h1><p>' . __( 'You appear to have already installed WordPress. To reinstall please clear your old database tables first.' ) . '</p><p class="step"><a href="../wp-login.php" class="button button-large">' . __( 'Log In' ) . '</a></p></body></html>' );
 }
 
 $php_version    = phpversion();
@@ -187,32 +190,32 @@ switch($step) {
 
 		display_header();
 		// Fill in the data we gathered
-		$weblog_title = isset( $_POST['weblog_title'] ) ? trim( stripslashes( $_POST['weblog_title'] ) ) : '';
-		$user_name = isset($_POST['user_name']) ? trim( stripslashes( $_POST['user_name'] ) ) : 'admin';
-		$admin_password = isset($_POST['admin_password']) ? $_POST['admin_password'] : '';
-		$admin_password_check = isset($_POST['admin_password2']) ? $_POST['admin_password2'] : '';
-		$admin_email  = isset( $_POST['admin_email']  ) ?trim( stripslashes( $_POST['admin_email'] ) ) : '';
+		$weblog_title = isset( $_POST['weblog_title'] ) ? trim( wp_unslash( $_POST['weblog_title'] ) ) : '';
+		$user_name = isset($_POST['user_name']) ? trim( wp_unslash( $_POST['user_name'] ) ) : '';
+		$admin_password = isset($_POST['admin_password']) ? wp_unslash( $_POST['admin_password'] ) : '';
+		$admin_password_check = isset($_POST['admin_password2']) ? wp_unslash( $_POST['admin_password2'] ) : '';
+		$admin_email  = isset( $_POST['admin_email']  ) ?trim( wp_unslash( $_POST['admin_email'] ) ) : '';
 		$public       = isset( $_POST['blog_public']  ) ? (int) $_POST['blog_public'] : 0;
 		// check e-mail address
 		$error = false;
 		if ( empty( $user_name ) ) {
 			// TODO: poka-yoke
-			display_setup_form( __('you must provide a valid username.') );
+			display_setup_form( __( 'Please provide a valid username.' ) );
 			$error = true;
 		} elseif ( $user_name != sanitize_user( $user_name, true ) ) {
-			display_setup_form( __('the username you provided has invalid characters.') );
+			display_setup_form( __( 'The username you provided has invalid characters.' ) );
 			$error = true;
 		} elseif ( $admin_password != $admin_password_check ) {
 			// TODO: poka-yoke
-			display_setup_form( __( 'your passwords do not match. Please try again' ) );
+			display_setup_form( __( 'Your passwords do not match. Please try again.' ) );
 			$error = true;
 		} else if ( empty( $admin_email ) ) {
 			// TODO: poka-yoke
-			display_setup_form( __( 'you must provide an e-mail address.' ) );
+			display_setup_form( __( 'You must provide an email address.' ) );
 			$error = true;
 		} elseif ( ! is_email( $admin_email ) ) {
 			// TODO: poka-yoke
-			display_setup_form( __( 'that isn&#8217;t a valid e-mail address. E-mail addresses look like: <code>username@example.com</code>' ) );
+			display_setup_form( __( 'Sorry, that isn&#8217;t a valid email address. Email addresses look like <code>username@example.com</code>.' ) );
 			$error = true;
 		}
 
@@ -241,14 +244,16 @@ switch($step) {
 	</tr>
 </table>
 
-<p class="step"><a href="../wp-login.php" class="button"><?php _e( 'Log In' ); ?></a></p>
+<p class="step"><a href="../wp-login.php" class="button button-large"><?php _e( 'Log In' ); ?></a></p>
 
 <?php
 		}
 		break;
 }
+if ( !wp_is_mobile() ) {
 ?>
 <script type="text/javascript">var t = document.getElementById('weblog_title'); if (t){ t.focus(); }</script>
+<?php } ?>
 <?php wp_print_scripts( 'user-profile' ); ?>
 </body>
 </html>

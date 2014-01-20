@@ -37,12 +37,6 @@ if ( file_exists( ABSPATH . 'wp-config.php') ) {
 
 	// A config file doesn't exist
 
-	// Set a path for the link to the installer
-	if ( strpos($_SERVER['PHP_SELF'], 'wp-admin') !== false )
-		$path = 'setup-config.php';
-	else
-		$path = 'wp-admin/setup-config.php';
-
 	define( 'WPINC', 'wp-includes' );
 	define( 'WP_CONTENT_DIR', ABSPATH . 'wp-content' );
 	require_once( ABSPATH . WPINC . '/load.php' );
@@ -51,13 +45,18 @@ if ( file_exists( ABSPATH . 'wp-config.php') ) {
 	wp_check_php_mysql_versions();
 	wp_load_translations_early();
 
+	// Standardize $_SERVER variables across setups.
+	wp_fix_server_vars();
+
 	require_once( ABSPATH . WPINC . '/functions.php' );
+
+	$path = wp_guess_url() . '/wp-admin/setup-config.php';
 
 	// Die with an error message
 	$die  = __( "There doesn't seem to be a <code>wp-config.php</code> file. I need this before we can get started." ) . '</p>';
 	$die .= '<p>' . __( "Need more help? <a href='http://codex.wordpress.org/Editing_wp-config.php'>We got it</a>." ) . '</p>';
 	$die .= '<p>' . __( "You can create a <code>wp-config.php</code> file through a web interface, but this doesn't work for all server setups. The safest way is to manually create the file." ) . '</p>';
-	$die .= '<p><a href="' . $path . '" class="button">' . __( "Create a Configuration File" ) . '</a>';
+	$die .= '<p><a href="' . $path . '" class="button button-large">' . __( "Create a Configuration File" ) . '</a>';
 
 	wp_die( $die, __( 'WordPress &rsaquo; Error' ) );
 }

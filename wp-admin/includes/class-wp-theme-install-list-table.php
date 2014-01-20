@@ -24,7 +24,7 @@ class WP_Theme_Install_List_Table extends WP_Themes_List_Table {
 		$search_terms = array();
 		$search_string = '';
 		if ( ! empty( $_REQUEST['s'] ) ){
-			$search_string = strtolower( stripslashes( $_REQUEST['s'] ) );
+			$search_string = strtolower( wp_unslash( $_REQUEST['s'] ) );
 			$search_terms = array_unique( array_filter( array_map( 'trim', explode( ',', $search_string ) ) ) );
 		}
 
@@ -51,7 +51,7 @@ class WP_Theme_Install_List_Table extends WP_Themes_List_Table {
 		$tabs = apply_filters( 'install_themes_tabs', $tabs );
 		$nonmenu_tabs = apply_filters( 'install_themes_nonmenu_tabs', $nonmenu_tabs );
 
-		// If a non-valid menu tab has been selected, And its not a non-menu action.
+		// If a non-valid menu tab has been selected, And it's not a non-menu action.
 		if ( empty( $tab ) || ( ! isset( $tabs[ $tab ] ) && ! in_array( $tab, (array) $nonmenu_tabs ) ) )
 			$tab = key( $tabs );
 
@@ -59,7 +59,7 @@ class WP_Theme_Install_List_Table extends WP_Themes_List_Table {
 
 		switch ( $tab ) {
 			case 'search':
-				$type = isset( $_REQUEST['type'] ) ? stripslashes( $_REQUEST['type'] ) : 'term';
+				$type = isset( $_REQUEST['type'] ) ? wp_unslash( $_REQUEST['type'] ) : 'term';
 				switch ( $type ) {
 					case 'tag':
 						$args['tag'] = array_map( 'sanitize_key', $search_terms );
@@ -90,7 +90,10 @@ class WP_Theme_Install_List_Table extends WP_Themes_List_Table {
 
 			default:
 				$args = false;
+				break;
 		}
+
+		$args = apply_filters( 'install_themes_table_api_args_' . $tab, $args );
 
 		if ( ! $args )
 			return;
@@ -134,7 +137,6 @@ class WP_Theme_Install_List_Table extends WP_Themes_List_Table {
 				<?php do_action( 'install_themes_table_header' ); ?>
 			</div>
 			<?php $this->pagination( 'top' ); ?>
-			<img src="<?php echo esc_url( admin_url( 'images/wpspin_light.gif' ) ); ?>" class="ajax-loading list-ajax-loading" alt="" />
 			<br class="clear" />
 		</div>
 
@@ -158,24 +160,24 @@ class WP_Theme_Install_List_Table extends WP_Themes_List_Table {
 		$this->theme_installer();
 	}
 
-	/*
+	/**
 	 * Prints a theme from the WordPress.org API.
 	 *
 	 * @param object $theme An object that contains theme data returned by the WordPress.org API.
 	 *
 	 * Example theme data:
 	 *   object(stdClass)[59]
-	 *     public 'name' => string 'Magazine Basic' (length=14)
-	 *     public 'slug' => string 'magazine-basic' (length=14)
-	 *     public 'version' => string '1.1' (length=3)
-	 *     public 'author' => string 'tinkerpriest' (length=12)
-	 *     public 'preview_url' => string 'http://wp-themes.com/?magazine-basic' (length=36)
-	 *     public 'screenshot_url' => string 'http://wp-themes.com/wp-content/themes/magazine-basic/screenshot.png' (length=68)
+	 *     public 'name' => string 'Magazine Basic'
+	 *     public 'slug' => string 'magazine-basic'
+	 *     public 'version' => string '1.1'
+	 *     public 'author' => string 'tinkerpriest'
+	 *     public 'preview_url' => string 'http://wp-themes.com/?magazine-basic'
+	 *     public 'screenshot_url' => string 'http://wp-themes.com/wp-content/themes/magazine-basic/screenshot.png'
 	 *     public 'rating' => float 80
 	 *     public 'num_ratings' => int 1
-	 *     public 'homepage' => string 'http://wordpress.org/extend/themes/magazine-basic' (length=49)
-	 *     public 'description' => string 'A basic magazine style layout with a fully customizable layout through a backend interface. Designed by <a href="http://bavotasan.com">c.bavota</a> of <a href="http://tinkerpriestmedia.com">Tinker Priest Media</a>.' (length=214)
-	 *     public 'download_link' => string 'http://wordpress.org/extend/themes/download/magazine-basic.1.1.zip' (length=66)
+	 *     public 'homepage' => string 'http://wordpress.org/themes/magazine-basic'
+	 *     public 'description' => string 'A basic magazine style layout with a fully customizable layout through a backend interface. Designed by <a href="http://bavotasan.com">c.bavota</a> of <a href="http://tinkerpriestmedia.com">Tinker Priest Media</a>.'
+	 *     public 'download_link' => string 'http://wordpress.org/themes/download/magazine-basic.1.1.zip'
 	 */
 	function single_row( $theme ) {
 		global $themes_allowedtags;
@@ -237,7 +239,7 @@ class WP_Theme_Install_List_Table extends WP_Themes_List_Table {
 				<?php foreach ( $actions as $action ): ?>
 					<li><?php echo $action; ?></li>
 				<?php endforeach; ?>
-				<li class="hide-if-no-js"><a href="#" class="theme-detail" tabindex='4'><?php _e('Details') ?></a></li>
+				<li class="hide-if-no-js"><a href="#" class="theme-detail"><?php _e('Details') ?></a></li>
 			</ul>
 		</div>
 
@@ -245,7 +247,7 @@ class WP_Theme_Install_List_Table extends WP_Themes_List_Table {
 		$this->install_theme_info( $theme );
 	}
 
-	/*
+	/**
 	 * Prints the wrapper for the theme installer.
 	 */
 	function theme_installer() {
@@ -253,13 +255,14 @@ class WP_Theme_Install_List_Table extends WP_Themes_List_Table {
 		<div id="theme-installer" class="wp-full-overlay expanded">
 			<div class="wp-full-overlay-sidebar">
 				<div class="wp-full-overlay-header">
-					<a href="#" class="close-full-overlay"><?php _e( '&larr; Close' ); ?></a>
+					<a href="#" class="close-full-overlay button-secondary"><?php _e( 'Close' ); ?></a>
+					<span class="theme-install"></span>
 				</div>
 				<div class="wp-full-overlay-sidebar-content">
 					<div class="install-theme-info"></div>
 				</div>
 				<div class="wp-full-overlay-footer">
-					<a href="#" class="collapse-sidebar button-secondary" title="<?php esc_attr_e('Collapse Sidebar'); ?>">
+					<a href="#" class="collapse-sidebar" title="<?php esc_attr_e('Collapse Sidebar'); ?>">
 						<span class="collapse-sidebar-label"><?php _e('Collapse'); ?></span>
 						<span class="collapse-sidebar-arrow"></span>
 					</a>
@@ -270,7 +273,7 @@ class WP_Theme_Install_List_Table extends WP_Themes_List_Table {
 		<?php
 	}
 
-	/*
+	/**
 	 * Prints the wrapper for the theme installer with a provided theme's data.
 	 * Used to make the theme installer work for no-js.
 	 *
@@ -289,7 +292,7 @@ class WP_Theme_Install_List_Table extends WP_Themes_List_Table {
 		<?php
 	}
 
-	/*
+	/**
 	 * Prints the info for a theme (to be used in the theme installer modal).
 	 *
 	 * @param object $theme - A WordPress.org Theme API object.
@@ -338,9 +341,7 @@ class WP_Theme_Install_List_Table extends WP_Themes_List_Table {
 				<img class="theme-screenshot" src="<?php echo esc_url( $theme->screenshot_url ); ?>" />
 			<?php endif; ?>
 			<div class="theme-details">
-				<div class="star-holder" title="<?php echo esc_attr( $num_ratings ); ?>">
-					<div class="star-rating" style="width:<?php echo esc_attr( intval( $theme->rating ) . 'px' ); ?>;"></div>
-				</div>
+				<?php wp_star_rating( array( 'rating' => $theme->rating, 'type' => 'percent', 'number' => $theme->num_ratings ) ); ?>
 				<div class="theme-version">
 					<strong><?php _e('Version:') ?> </strong>
 					<?php echo wp_kses( $theme->version, $themes_allowedtags ); ?>
@@ -363,7 +364,7 @@ class WP_Theme_Install_List_Table extends WP_Themes_List_Table {
 	 * @uses $tab Global; current tab within Themes->Install screen
 	 * @uses $type Global; type of search.
 	 */
-	function _js_vars() {
+	function _js_vars( $extra_args = array() ) {
 		global $tab, $type;
 		parent::_js_vars( compact( 'tab', 'type' ) );
 	}

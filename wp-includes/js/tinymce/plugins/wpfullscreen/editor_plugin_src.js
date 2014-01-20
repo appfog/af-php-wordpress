@@ -1,32 +1,34 @@
+/* global tinymce:false, switchEditors, fullscreen */
 /**
  * WP Fullscreen TinyMCE plugin
  *
- * Contains code from Moxiecode Systems AB released under LGPL License http://tinymce.moxiecode.com/license
+ * Contains code from Moxiecode Systems AB released under LGPL http://tinymce.moxiecode.com/license
  */
 
 (function() {
 	tinymce.create('tinymce.plugins.wpFullscreenPlugin', {
+		resize_timeout: false,
 
-		init : function(ed, url) {
-			var t = this, oldHeight = 0, s = {}, DOM = tinymce.DOM;
+		init : function( ed ) {
+			var t = this, s = {}, DOM = tinymce.DOM;
 
 			// Register commands
 			ed.addCommand('wpFullScreenClose', function() {
-				// this removes the editor, content has to be saved first with tinyMCE.execCommand('wpFullScreenSave');
+				// this removes the editor, content has to be saved first with tinymce.execCommand('wpFullScreenSave');
 				if ( ed.getParam('wp_fullscreen_is_enabled') ) {
 					DOM.win.setTimeout(function() {
-						tinyMCE.remove(ed);
+						tinymce.remove(ed);
 						DOM.remove('wp_mce_fullscreen_parent');
-						tinyMCE.settings = tinyMCE.oldSettings; // Restore old settings
+						tinymce.settings = tinymce.oldSettings; // Restore old settings
 					}, 10);
 				}
 			});
 
 			ed.addCommand('wpFullScreenSave', function() {
-				var ed = tinyMCE.get('wp_mce_fullscreen'), edd;
+				var ed = tinymce.get('wp_mce_fullscreen'), edd;
 
 				ed.focus();
-				edd = tinyMCE.get( ed.getParam('wp_fullscreen_editor_id') );
+				edd = tinymce.get( ed.getParam('wp_fullscreen_editor_id') );
 
 				edd.setContent( ed.getContent({format : 'raw'}), {format : 'raw'} );
 			});
@@ -34,11 +36,11 @@
 			ed.addCommand('wpFullScreenInit', function() {
 				var d, b, fsed;
 
-				ed = tinyMCE.activeEditor;
+				ed = tinymce.activeEditor;
 				d = ed.getDoc();
 				b = d.body;
 
-				tinyMCE.oldSettings = tinyMCE.settings; // Store old settings
+				tinymce.oldSettings = tinymce.settings; // Store old settings
 
 				tinymce.each(ed.settings, function(v, n) {
 					s[n] = v;
@@ -66,7 +68,7 @@
 						edd.setContent( switchEditors.wpautop( edd.getElement().value ) );
 
 					setTimeout(function(){ // add last
-						edd.onNodeChange.add(function(ed, cm, e){
+						edd.onNodeChange.add( function() {
 							tinymce.each(buttons, function(c) {
 								var btn, cls;
 
@@ -93,13 +95,21 @@
 				}
 			});
 
+			ed.addCommand('wpFullScreen', function() {
+				if ( typeof(fullscreen) == 'undefined' )
+					return;
+
+				if ( 'wp_mce_fullscreen' == ed.id )
+					fullscreen.off();
+				else
+					fullscreen.on();
+			});
+
 			// Register buttons
-			if ( 'undefined' != fullscreen ) {
-				ed.addButton('wp_fullscreen', {
-					title : 'fullscreen.desc',
-					onclick : function(){ fullscreen.on(); }
-				});
-			}
+			ed.addButton('wp_fullscreen', {
+				title : 'wordpress.wp_fullscreen_desc',
+				cmd : 'wpFullScreen'
+			});
 
 			// END fullscreen
 //----------------------------------------------------------------
@@ -111,39 +121,46 @@
 			/**
 			 * This method gets executed each time the editor needs to resize.
 			 */
-			function resize() {
-				var d = ed.getDoc(), DOM = tinymce.DOM, resizeHeight, myHeight;
+			function resize(editor, e) {
+				var DOM = tinymce.DOM, body = ed.getBody(), ifr = DOM.get(ed.id + '_ifr'), height, y = ed.dom.win.scrollY;
 
-				// Get height differently depending on the browser used
-				if ( tinymce.isWebKit )
-					myHeight = d.body.offsetHeight;
-				else
-					myHeight = d.body.scrollHeight;
+				if ( t.resize_timeout )
+					return;
 
-				// Don't make it smaller than 300px
-				resizeHeight = (myHeight > 300) ? myHeight : 300;
+				// sometimes several events are fired few ms apart, trottle down resizing a little
+				t.resize_timeout = true;
+				setTimeout(function(){
+					t.resize_timeout = false;
+				}, 500);
 
-				// Resize content element
-				if ( oldHeight != resizeHeight ) {
-					DOM.setStyle(DOM.get(ed.id + '_ifr'), 'height', resizeHeight + 'px');
-					oldHeight = resizeHeight;
-					ed.getWin().scrollTo(0,0);
+				height = body.scrollHeight > 300 ? body.scrollHeight : 300;
+
+				if ( height != ifr.scrollHeight ) {
+					DOM.setStyle(ifr, 'height', height + 'px');
+					ed.getWin().scrollTo(0, 0); // iframe window object, make sure there's no scrolling
 				}
-			};
+
+				// WebKit scrolls to top on paste...
+				if ( e && e.type == 'paste' && tinymce.isWebKit ) {
+					setTimeout(function(){
+						ed.dom.win.scrollTo(0, y);
+					}, 40);
+				}
+			}
 
 			// Add appropriate listeners for resizing content area
-			ed.onInit.add(function(ed, l) {
+			ed.onInit.add( function( ed ) {
 				ed.onChange.add(resize);
 				ed.onSetContent.add(resize);
 				ed.onPaste.add(resize);
 				ed.onKeyUp.add(resize);
 				ed.onPostRender.add(resize);
 
-				ed.getBody().style.overflowY = "hidden";
+				ed.getBody().style.overflowY = 'hidden';
 			});
 
-			if (ed.getParam('autoresize_on_init', true)) {
-				ed.onLoadContent.add(function(ed, l) {
+			if ( ed.getParam('autoresize_on_init', true) ) {
+				ed.onLoadContent.add( function() {
 					// Because the content area resizes when its content CSS loads,
 					// and we can't easily add a listener to its onload event,
 					// we'll just trigger a resize after a short loading period
@@ -153,7 +170,7 @@
 				});
 			}
 
-			// Register the command so that it can be invoked by using tinyMCE.activeEditor.execCommand('mceExample');
+			// Register the command so that it can be invoked by using tinymce.activeEditor.execCommand('mceExample');
 			ed.addCommand('wpAutoResize', resize);
 		},
 

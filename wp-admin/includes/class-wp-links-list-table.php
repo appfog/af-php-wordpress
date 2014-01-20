@@ -9,9 +9,10 @@
  */
 class WP_Links_List_Table extends WP_List_Table {
 
-	function __construct() {
+	function __construct( $args = array() ) {
 		parent::__construct( array(
 			'plural' => 'bookmarks',
+			'screen' => isset( $args['screen'] ) ? $args['screen'] : null,
 		) );
 	}
 
@@ -22,7 +23,7 @@ class WP_Links_List_Table extends WP_List_Table {
 	function prepare_items() {
 		global $cat_id, $s, $orderby, $order;
 
-		wp_reset_vars( array( 'action', 'cat_id', 'linkurl', 'name', 'image', 'description', 'visible', 'target', 'category', 'link_id', 'submit', 'orderby', 'order', 'links_show_cat_id', 'rating', 'rel', 'notes', 'linkcheck[]', 's' ) );
+		wp_reset_vars( array( 'action', 'cat_id', 'link_id', 'orderby', 'order', 's' ) );
 
 		$args = array( 'hide_invisible' => 0, 'hide_empty' => 0 );
 
@@ -68,7 +69,7 @@ class WP_Links_List_Table extends WP_List_Table {
 				'orderby' => 'name',
 			);
 			wp_dropdown_categories( $dropdown_options );
-			submit_button( __( 'Filter' ), 'secondary', false, false, array( 'id' => 'post-query-submit' ) );
+			submit_button( __( 'Filter' ), 'button', false, false, array( 'id' => 'post-query-submit' ) );
 ?>
 		</div>
 <?php
@@ -128,8 +129,12 @@ class WP_Links_List_Table extends WP_List_Table {
 				$attributes = $class . $style;
 
 				switch ( $column_name ) {
-					case 'cb':
-						echo '<th scope="row" class="check-column"><input type="checkbox" name="linkcheck[]" value="'. esc_attr( $link->link_id ) .'" /></th>';
+					case 'cb': ?>
+						<th scope="row" class="check-column">
+							<label class="screen-reader-text" for="cb-select-<?php echo $link->link_id; ?>"><?php echo sprintf( __( 'Select %s' ), $link->link_name ); ?></label>
+							<input type="checkbox" name="linkcheck[]" id="cb-select-<?php echo $link->link_id; ?>" value="<?php echo esc_attr( $link->link_id ); ?>" />
+						</th>
+						<?php
 						break;
 
 					case 'name':
@@ -170,6 +175,14 @@ class WP_Links_List_Table extends WP_List_Table {
 	 					?><td <?php echo $attributes ?>><?php echo $rating; ?></td><?php
 						break;
 					default:
+						/**
+						 * Fires for each registered custom link column.
+						 *
+						 * @since 2.1.0
+						 *
+						 * @param string $column_name Name of the custom column.
+						 * @param int    $link_id     Link ID.
+						 */
 						?>
 						<td <?php echo $attributes ?>><?php do_action( 'manage_link_custom_column', $column_name, $link->link_id ); ?></td>
 						<?php

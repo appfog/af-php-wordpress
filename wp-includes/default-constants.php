@@ -12,7 +12,7 @@
  *
  * @since 3.0.0
  */
-function wp_initial_constants( ) {
+function wp_initial_constants() {
 	global $blog_id;
 
 	// set memory limits
@@ -20,7 +20,7 @@ function wp_initial_constants( ) {
 		if( is_multisite() ) {
 			define('WP_MEMORY_LIMIT', '64M');
 		} else {
-			define('WP_MEMORY_LIMIT', '32M');
+			define('WP_MEMORY_LIMIT', '40M');
 		}
 	}
 
@@ -39,8 +39,18 @@ function wp_initial_constants( ) {
 		$blog_id = 1;
 
 	// set memory limits.
-	if ( function_exists('memory_get_usage') && ( (int) @ini_get('memory_limit') < abs(intval(WP_MEMORY_LIMIT)) ) )
-		@ini_set('memory_limit', WP_MEMORY_LIMIT);
+	if ( function_exists( 'memory_get_usage' ) ) {
+		$current_limit = @ini_get( 'memory_limit' );
+		$current_limit_int = intval( $current_limit );
+		if ( false !== strpos( $current_limit, 'G' ) )
+			$current_limit_int *= 1024;
+		$wp_limit_int = intval( WP_MEMORY_LIMIT );
+		if ( false !== strpos( WP_MEMORY_LIMIT, 'G' ) )
+			$wp_limit_int *= 1024;
+
+		if ( -1 != $current_limit && ( -1 == WP_MEMORY_LIMIT || $current_limit_int < $wp_limit_int ) )
+			@ini_set( 'memory_limit', WP_MEMORY_LIMIT );
+	}
 
 	if ( !defined('WP_CONTENT_DIR') )
 		define( 'WP_CONTENT_DIR', ABSPATH . 'wp-content' ); // no trailing slash, full paths only - WP_CONTENT_URL is defined further down
@@ -69,6 +79,14 @@ function wp_initial_constants( ) {
 
 	if ( !defined('SHORTINIT') )
 		define('SHORTINIT', false);
+
+	// Constants for expressing human-readable intervals
+	// in their respective number of seconds.
+	define( 'MINUTE_IN_SECONDS', 60 );
+	define( 'HOUR_IN_SECONDS',   60 * MINUTE_IN_SECONDS );
+	define( 'DAY_IN_SECONDS',    24 * HOUR_IN_SECONDS   );
+	define( 'WEEK_IN_SECONDS',    7 * DAY_IN_SECONDS    );
+	define( 'YEAR_IN_SECONDS',  365 * DAY_IN_SECONDS    );
 }
 
 /**
@@ -78,7 +96,7 @@ function wp_initial_constants( ) {
  *
  * @since 3.0.0
  */
-function wp_plugin_directory_constants( ) {
+function wp_plugin_directory_constants() {
 	if ( !defined('WP_CONTENT_URL') )
 		define( 'WP_CONTENT_URL', get_option('siteurl') . '/wp-content'); // full url - WP_CONTENT_DIR is defined further up
 
@@ -139,7 +157,7 @@ function wp_plugin_directory_constants( ) {
  * Defines constants after multisite is loaded. Cookie-related constants may be overridden in ms_network_cookies().
  * @since 3.0.0
  */
-function wp_cookie_constants( ) {
+function wp_cookie_constants() {
 	/**
 	 * Used to guarantee unique hash cookies
 	 * @since 1.5
@@ -224,7 +242,7 @@ function wp_cookie_constants( ) {
  *
  * @since 3.0.0
  */
-function wp_ssl_constants( ) {
+function wp_ssl_constants() {
 	/**
 	 * @since 2.6.0
 	 */
@@ -245,7 +263,7 @@ function wp_ssl_constants( ) {
  *
  * @since 3.0.0
  */
-function wp_functionality_constants( ) {
+function wp_functionality_constants() {
 	/**
 	 * @since 2.5.0
 	 */
@@ -273,7 +291,7 @@ function wp_functionality_constants( ) {
  *
  * @since 3.0.0
  */
-function wp_templating_constants( ) {
+function wp_templating_constants() {
 	/**
 	 * Filesystem path to the current active template directory
 	 * @since 1.5.0
@@ -293,6 +311,6 @@ function wp_templating_constants( ) {
 	 * @since 3.0.0
 	 */
 	if ( !defined('WP_DEFAULT_THEME') )
-		define( 'WP_DEFAULT_THEME', 'twentyeleven' );
+		define( 'WP_DEFAULT_THEME', 'twentyfourteen' );
 
 }

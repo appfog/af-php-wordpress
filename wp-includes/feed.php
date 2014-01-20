@@ -83,7 +83,7 @@ function get_wp_title_rss($sep = '&#187;') {
 	$title = wp_title($sep, false);
 	if ( is_wp_error( $title ) )
 		return $title->get_error_message();
-	$title = apply_filters('get_wp_title_rss', $title);
+	$title = apply_filters( 'get_wp_title_rss', $title, $sep );
 	return $title;
 }
 
@@ -98,8 +98,8 @@ function get_wp_title_rss($sep = '&#187;') {
  *
  * @param string $sep Optional.
  */
-function wp_title_rss($sep = '&#187;') {
-	echo apply_filters('wp_title_rss', get_wp_title_rss($sep));
+function wp_title_rss( $sep = '&#187;' ) {
+	echo apply_filters( 'wp_title_rss', get_wp_title_rss( $sep ), $sep );
 }
 
 /**
@@ -140,6 +140,7 @@ function the_title_rss() {
  * @see get_the_content()
  *
  * @param string $feed_type The type of feed. rss2 | atom | rss | rdf
+ * @return string The filtered content.
  */
 function get_the_content_feed($feed_type = null) {
 	if ( !$feed_type )
@@ -197,7 +198,7 @@ function the_permalink_rss() {
  * @return none
  */
 function comments_link_feed() {
-	echo esc_url( get_comments_link() );
+	echo esc_url( apply_filters( 'comments_link_feed', get_comments_link() ) );
 }
 
 /**
@@ -238,7 +239,7 @@ function get_comment_guid($comment_id = null) {
  * @since 1.5.0
  */
 function comment_link() {
-	echo esc_url( get_comment_link() );
+	echo esc_url( apply_filters( 'comment_link', get_comment_link() ) );
 }
 
 /**
@@ -390,7 +391,7 @@ function rss_enclosure() {
 			foreach ( (array) $val as $enc ) {
 				$enclosure = explode("\n", $enc);
 
-				//only get the the first element eg, audio/mpeg from 'audio/mpeg mpga mp2 mp3'
+				// only get the first element, e.g. audio/mpeg from 'audio/mpeg mpga mp2 mp3'
 				$t = preg_split('/[ \t]/', trim($enclosure[2]) );
 				$type = $t[0];
 
@@ -487,12 +488,7 @@ function prep_atom_text_construct($data) {
  */
 function self_link() {
 	$host = @parse_url(home_url());
-	$host = $host['host'];
-	echo esc_url(
-		( is_ssl() ? 'https' : 'http' ) . '://'
-		. $host
-		. stripslashes($_SERVER['REQUEST_URI'])
-		);
+	echo esc_url( apply_filters( 'self_link', set_url_scheme( 'http://' . $host['host'] . wp_unslash( $_SERVER['REQUEST_URI'] ) ) ) );
 }
 
 /**
@@ -524,23 +520,33 @@ function feed_content_type( $type = '' ) {
  *
  * @since 2.8
  *
- * @param string $url URL to retrieve feed
+ * @param mixed $url URL of feed to retrieve. If an array of URLs, the feeds are merged
+ * using SimplePie's multifeed feature.
+ * See also {@link ​http://simplepie.org/wiki/faq/typical_multifeed_gotchas}
+ *
  * @return WP_Error|SimplePie WP_Error object on failure or SimplePie object on success
  */
-function fetch_feed($url) {
-	require_once (ABSPATH . WPINC . '/class-feed.php');
+function fetch_feed( $url ) {
+	require_once( ABSPATH . WPINC . '/class-feed.php' );
 
 	$feed = new SimplePie();
-	$feed->set_feed_url($url);
-	$feed->set_cache_class('WP_Feed_Cache');
-	$feed->set_file_class('WP_SimplePie_File');
-	$feed->set_cache_duration(apply_filters('wp_feed_cache_transient_lifetime', 43200, $url));
+
+	$feed->set_sanitize_class( 'WP_SimplePie_Sanitize_KSES' );
+	// We must manually overwrite $feed->sanitize because SimplePie's
+	// constructor sets it before we have a chance to set the sanitization class
+	$feed->sanitize = new WP_SimplePie_Sanitize_KSES();
+
+	$feed->set_cache_class( 'WP_Feed_Cache' );
+	$feed->set_file_class( 'WP_SimplePie_File' );
+
+	$feed->set_feed_url( $url );
+	$feed->set_cache_duration( apply_filters( 'wp_feed_cache_transient_lifetime', 12 * HOUR_IN_SECONDS, $url ) );
 	do_action_ref_array( 'wp_feed_options', array( &$feed, $url ) );
 	$feed->init();
 	$feed->handle_content_type();
 
 	if ( $feed->error() )
-		return new WP_Error('simplepie-error', $feed->error());
+		return new WP_Error( 'simplepie-error', $feed->error() );
 
 	return $feed;
 }

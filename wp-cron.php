@@ -23,15 +23,15 @@ define('DOING_CRON', true);
 
 if ( !defined('ABSPATH') ) {
 	/** Set up WordPress environment */
-	require_once('./wp-load.php');
+	require_once( dirname( __FILE__ ) . '/wp-load.php' );
 }
 
 // Uncached doing_cron transient fetch
 function _get_cron_lock() {
-	global $_wp_using_ext_object_cache, $wpdb;
+	global $wpdb;
 
 	$value = 0;
-	if ( $_wp_using_ext_object_cache ) {
+	if ( wp_using_ext_object_cache() ) {
 		// Skip local cache and force refetch of doing_cron transient in case
 		// another processs updated the cache
 		$value = wp_cache_get( 'doing_cron', 'transient', true );
@@ -48,9 +48,9 @@ if ( false === $crons = _get_cron_array() )
 	die();
 
 $keys = array_keys( $crons );
-$local_time = microtime( true );
+$gmt_time = microtime( true );
 
-if ( isset($keys[0]) && $keys[0] > $local_time )
+if ( isset($keys[0]) && $keys[0] > $gmt_time )
 	die();
 
 $doing_cron_transient = get_transient( 'doing_cron');
@@ -59,7 +59,7 @@ $doing_cron_transient = get_transient( 'doing_cron');
 if ( empty( $doing_wp_cron ) ) {
 	if ( empty( $_GET[ 'doing_wp_cron' ] ) ) {
 		// Called from external script/job. Try setting a lock.
-		if ( $doing_cron_transient && ( $doing_cron_transient + WP_CRON_LOCK_TIMEOUT > $local_time ) )
+		if ( $doing_cron_transient && ( $doing_cron_transient + WP_CRON_LOCK_TIMEOUT > $gmt_time ) )
 			return;
 		$doing_cron_transient = $doing_wp_cron = sprintf( '%.22F', microtime( true ) );
 		set_transient( 'doing_cron', $doing_wp_cron );
@@ -73,7 +73,7 @@ if ( $doing_cron_transient != $doing_wp_cron )
 	return;
 
 foreach ( $crons as $timestamp => $cronhooks ) {
-	if ( $timestamp > $local_time )
+	if ( $timestamp > $gmt_time )
 		break;
 
 	foreach ( $cronhooks as $hook => $keys ) {
@@ -89,6 +89,14 @@ foreach ( $crons as $timestamp => $cronhooks ) {
 
 			wp_unschedule_event( $timestamp, $hook, $v['args'] );
 
+			/**
+			 * Fires scheduled events.
+			 *
+			 * @since 2.1.0
+			 *
+			 * @param string $hook Name of the hook that was scheduled to be fired.
+			 * @param array $v['args'] The arguments to be passed to the hook.
+			 */
  			do_action_ref_array( $hook, $v['args'] );
 
 			// If the hook ran too long and another cron process stole the lock, quit.

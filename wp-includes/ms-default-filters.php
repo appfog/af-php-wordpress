@@ -18,7 +18,7 @@ add_filter( 'wpmu_validate_user_signup', 'signup_nonce_check' );
 add_action( 'init', 'maybe_add_existing_user_to_blog' );
 add_action( 'wpmu_new_user', 'newuser_notify_siteadmin' );
 add_action( 'wpmu_activate_user', 'add_new_user_to_blog', 10, 3 );
-add_action( 'sanitize_user', 'strtolower' );
+add_filter( 'sanitize_user', 'strtolower' );
 
 // Blogs
 add_filter( 'wpmu_validate_blog_signup', 'signup_nonce_check' );
@@ -37,14 +37,22 @@ add_filter( 'term_id_filter', 'global_terms', 10, 2 );
 add_action( 'publish_post', 'update_posts_count' );
 add_action( 'delete_post', '_update_blog_date_on_post_delete' );
 add_action( 'transition_post_status', '_update_blog_date_on_post_publish', 10, 3 );
+
+// Counts
 add_action( 'admin_init', 'wp_schedule_update_network_counts');
 add_action( 'update_network_counts', 'wp_update_network_counts');
+foreach ( array( 'user_register', 'deleted_user', 'wpmu_new_user', 'make_spam_user', 'make_ham_user' ) as $action )
+	add_action( $action, 'wp_maybe_update_network_user_counts' );
+foreach ( array( 'make_spam_blog', 'make_ham_blog', 'archive_blog', 'unarchive_blog', 'make_delete_blog', 'make_undelete_blog' ) as $action )
+	add_action( $action, 'wp_maybe_update_network_site_counts' );
+unset( $action );
 
 // Files
 add_filter( 'wp_upload_bits', 'upload_is_file_too_big' );
 add_filter( 'import_upload_size_limit', 'fix_import_form_size' );
 add_filter( 'upload_mimes', 'check_upload_mimes' );
 add_filter( 'upload_size_limit', 'upload_size_limit_filter' );
+add_action( 'upload_ui_over_quota', 'multisite_over_quota_message' );
 
 // Mail
 add_action( 'phpmailer_init', 'fix_phpmailer_messageid' );
@@ -60,3 +68,9 @@ add_filter( 'force_filtered_html_on_import', '__return_true' );
 // WP_HOME and WP_SITEURL should not have any effect in MS
 remove_filter( 'option_siteurl', '_config_wp_siteurl' );
 remove_filter( 'option_home',    '_config_wp_home'    );
+
+// If the network upgrade hasn't run yet, assume ms-files.php rewriting is used.
+add_filter( 'default_site_option_ms_files_rewriting', '__return_true' );
+
+// Whitelist multisite domains for HTTP requests
+add_filter( 'http_request_host_is_external', 'ms_allowed_http_request_hosts', 20, 2 );

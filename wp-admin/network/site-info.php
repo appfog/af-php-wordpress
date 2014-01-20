@@ -8,7 +8,7 @@
  */
 
 /** Load WordPress Administration Bootstrap */
-require_once( './admin.php' );
+require_once( dirname( __FILE__ ) . '/admin.php' );
 
 if ( ! is_multisite() )
 	wp_die( __( 'Multisite support is not enabled.' ) );
@@ -50,7 +50,7 @@ if ( isset($_REQUEST['action']) && 'update-site' == $_REQUEST['action'] ) {
 	switch_to_blog( $id );
 
 	if ( isset( $_POST['update_home_url'] ) && $_POST['update_home_url'] == 'update' ) {
-		$blog_address = get_blogaddress_by_domain( $_POST['blog']['domain'], $_POST['blog']['path'] );
+		$blog_address = esc_url_raw( $_POST['blog']['domain'] . $_POST['blog']['path'] );
 		if ( get_option( 'siteurl' ) != $blog_address )
 			update_option( 'siteurl', $blog_address );
 
@@ -62,7 +62,7 @@ if ( isset($_REQUEST['action']) && 'update-site' == $_REQUEST['action'] ) {
 	delete_option( 'rewrite_rules' );
 
 	// update blogs table
-	$blog_data = stripslashes_deep( $_POST['blog'] );
+	$blog_data = wp_unslash( $_POST['blog'] );
 	$existing_details = get_blog_details( $id, false );
 	$blog_data_checkboxes = array( 'public', 'archived', 'spam', 'mature', 'deleted' );
 	foreach ( $blog_data_checkboxes as $c ) {
@@ -91,12 +91,11 @@ $title = sprintf( __('Edit Site: %s'), $site_url_no_http );
 $parent_file = 'sites.php';
 $submenu_file = 'sites.php';
 
-require('../admin-header.php');
+require( ABSPATH . 'wp-admin/admin-header.php' );
 
 ?>
 
 <div class="wrap">
-<?php screen_icon('ms-admin'); ?>
 <h2 id="edit-site"><?php echo $title_site_url_linked ?></h2>
 <h3 class="nav-tab-wrapper">
 <?php
@@ -135,10 +134,15 @@ if ( ! empty( $messages ) ) {
 			<th scope="row"><?php _e( 'Path' ) ?></th>
 			<?php if ( $is_main_site ) { ?>
 			<td><code><?php echo esc_attr( $details->path ) ?></code></td>
-			<?php } else { ?>
+			<?php
+			} else {
+				switch_to_blog( $id );
+			?>
 			<td><input name="blog[path]" type="text" id="path" value="<?php echo esc_attr( $details->path ) ?>" size="40" style='margin-bottom:5px;' />
-			<br /><input type="checkbox" style="width:20px;" name="update_home_url" value="update" <?php if ( get_blog_option( $id, 'siteurl' ) == untrailingslashit( get_blogaddress_by_id ($id ) ) || get_blog_option( $id, 'home' ) == untrailingslashit( get_blogaddress_by_id( $id ) ) ) echo 'checked="checked"'; ?> /> <?php _e( 'Update <code>siteurl</code> and <code>home</code> as well.' ); ?></td>
-			<?php } ?>
+			<br /><input type="checkbox" style="width:20px;" name="update_home_url" value="update" <?php if ( get_option( 'siteurl' ) == untrailingslashit( get_blogaddress_by_id ($id ) ) || get_option( 'home' ) == untrailingslashit( get_blogaddress_by_id( $id ) ) ) echo 'checked="checked"'; ?> /> <?php _e( 'Update <code>siteurl</code> and <code>home</code> as well.' ); ?></td>
+			<?php
+				restore_current_blog();
+			} ?>
 		</tr>
 		<tr class="form-field">
 			<th scope="row"><?php _ex( 'Registered', 'site' ) ?></th>
@@ -172,4 +176,4 @@ if ( ! empty( $messages ) ) {
 
 </div>
 <?php
-require('../admin-footer.php');
+require( ABSPATH . 'wp-admin/admin-footer.php' );

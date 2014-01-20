@@ -7,7 +7,7 @@
  */
 
 /** WordPress Administration Bootstrap */
-require_once('./admin.php');
+require_once( dirname( __FILE__ ) . '/admin.php' );
 
 if ( ! current_user_can( 'manage_options' ) )
 	wp_die( __( 'You do not have sufficient permissions to manage options for this site.' ) );
@@ -15,15 +15,9 @@ if ( ! current_user_can( 'manage_options' ) )
 $title = __('Media Settings');
 $parent_file = 'options-general.php';
 
-$media_options_help = '<p>' . __('You can set maximum sizes for images inserted into your written content; you can also insert an image as Full Size.') . '</p>' .
-	'<p>' . __('The Embed option allows you embed a video, image, or other media content into your content automatically by typing the URL (of the web page where the file lives) on its own line when you create your content.');
+$media_options_help = '<p>' . __('You can set maximum sizes for images inserted into your written content; you can also insert an image as Full Size.') . '</p>';
 
-if ( ! empty( $content_width ) )
-	$media_options_help .= ' ' . __( 'If you do not set the maximum embed size, it will be automatically sized to fit into your content area.' );
-
-$media_options_help .= '</p>';
-
-if ( ! is_multisite() ) {
+if ( ! is_multisite() && ( get_option('upload_url_path') || ( get_option('upload_path') != 'wp-content/uploads' && get_option('upload_path') ) ) ) {
 	$media_options_help .= '<p>' . __('Uploading Files allows you to choose the folder and path for storing your uploaded files.') . '</p>';
 }
 
@@ -41,19 +35,18 @@ get_current_screen()->set_help_sidebar(
 	'<p>' . __('<a href="http://wordpress.org/support/" target="_blank">Support Forums</a>') . '</p>'
 );
 
-include('./admin-header.php');
+include( ABSPATH . 'wp-admin/admin-header.php' );
 
 ?>
 
 <div class="wrap">
-<?php screen_icon(); ?>
 <h2><?php echo esc_html( $title ); ?></h2>
 
 <form action="options.php" method="post">
 <?php settings_fields('media'); ?>
 
-<h3><?php _e('Image sizes') ?></h3>
-<p><?php _e('The sizes listed below determine the maximum dimensions in pixels to use when inserting an image into the body of a post.'); ?></p>
+<h3 class="title"><?php _e('Image sizes') ?></h3>
+<p><?php _e( 'The sizes listed below determine the maximum dimensions in pixels to use when adding an image to the Media Library.' ); ?></p>
 
 <table class="form-table">
 <tr valign="top">
@@ -91,36 +84,20 @@ include('./admin-header.php');
 <?php do_settings_fields('media', 'default'); ?>
 </table>
 
-<h3><?php _e('Embeds') ?></h3>
-
+<?php if ( isset( $GLOBALS['wp_settings']['media']['embeds'] ) ) : ?>
+<h3 class="title"><?php _e('Embeds') ?></h3>
 <table class="form-table">
-
-<tr valign="top">
-<th scope="row"><?php _e('Auto-embeds'); ?></th>
-<td><fieldset><legend class="screen-reader-text"><span><?php _e('When possible, embed the media content from a URL directly onto the page. For example: links to Flickr and YouTube.'); ?></span></legend>
-<label for="embed_autourls"><input name="embed_autourls" type="checkbox" id="embed_autourls" value="1" <?php checked( '1', get_option('embed_autourls') ); ?>/> <?php _e('When possible, embed the media content from a URL directly onto the page. For example: links to Flickr and YouTube.'); ?></label>
-</fieldset></td>
-</tr>
-
-<tr valign="top">
-<th scope="row"><?php _e('Maximum embed size') ?></th>
-<td>
-<label for="embed_size_w"><?php _e('Width'); ?></label>
-<input name="embed_size_w" type="number" step="1" min="0" id="embed_size_w" value="<?php form_option('embed_size_w'); ?>" class="small-text" />
-<label for="embed_size_h"><?php _e('Height'); ?></label>
-<input name="embed_size_h" type="number" step="1" min="0" id="embed_size_h" value="<?php form_option('embed_size_h'); ?>" class="small-text" />
-<?php if ( ! empty( $content_width ) )
-	echo '<p class="description">' . __( 'If the width value is left blank, embeds will default to the max width of your theme.' ) . '</p>';
-?>
-</td>
-</tr>
-
-<?php do_settings_fields('media', 'embeds'); ?>
+<?php do_settings_fields( 'media', 'embeds' ); ?>
 </table>
+<?php endif; ?>
 
 <?php if ( !is_multisite() ) : ?>
-<h3><?php _e('Uploading Files'); ?></h3>
+<h3 class="title"><?php _e('Uploading Files'); ?></h3>
 <table class="form-table">
+<?php
+// If upload_url_path is not the default (empty), and upload_path is not the default ('wp-content/uploads' or empty)
+if ( get_option('upload_url_path') || ( get_option('upload_path') != 'wp-content/uploads' && get_option('upload_path') ) ) :
+?>
 <tr valign="top">
 <th scope="row"><label for="upload_path"><?php _e('Store uploads in this folder'); ?></label></th>
 <td><input name="upload_path" type="text" id="upload_path" value="<?php echo esc_attr(get_option('upload_path')); ?>" class="regular-text code" />
@@ -134,7 +111,7 @@ include('./admin-header.php');
 <p class="description"><?php _e('Configuring this is optional. By default, it should be blank.'); ?></p>
 </td>
 </tr>
-
+<?php endif; ?>
 <tr>
 <th scope="row" colspan="2" class="th-full">
 <label for="uploads_use_yearmonth_folders">
@@ -156,4 +133,4 @@ include('./admin-header.php');
 
 </div>
 
-<?php include('./admin-footer.php'); ?>
+<?php include( ABSPATH . 'wp-admin/admin-footer.php' ); ?>

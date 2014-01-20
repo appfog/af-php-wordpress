@@ -7,7 +7,7 @@
  */
 
 /** WordPress Administration Bootstrap */
-require_once('./admin.php');
+require_once( dirname( __FILE__ ) . '/admin.php' );
 
 if ( ! current_user_can( 'manage_options' ) )
 	wp_die( __( 'You do not have sufficient permissions to manage options for this site.' ) );
@@ -28,29 +28,29 @@ get_current_screen()->add_help_tab( array(
 	'content' => '<p>' . __('Press This is a bookmarklet that makes it easy to blog about something you come across on the web. You can use it to just grab a link, or to post an excerpt. Press This will even allow you to choose from images included on the page and use them in your post. Just drag the Press This link on this screen to your bookmarks bar in your browser, and you&#8217;ll be on your way to easier content creation. Clicking on it while on another website opens a popup window with all these options.') . '</p>',
 ) );
 
-if ( is_multisite() ) {
-	$post_email_help = '<p>' . __('Due to security issues, you cannot use Post By Email on Multisite Installs.') . '</p>';
-} else {
-	$post_email_help = '<p>' . __('Post via email settings allow you to send your WordPress install an email with the content of your post. You must set up a secret e-mail account with POP3 access to use this, and any mail received at this address will be posted, so it&#8217;s a good idea to keep this address very secret.') . '</p>';
+/** This filter is documented in wp-admin/options.php */
+if ( apply_filters( 'enable_post_by_email_configuration', true ) ) {
+	get_current_screen()->add_help_tab( array(
+		'id'      => 'options-postemail',
+		'title'   => __( 'Post Via Email' ),
+		'content' => '<p>' . __( 'Post via email settings allow you to send your WordPress install an email with the content of your post. You must set up a secret e-mail account with POP3 access to use this, and any mail received at this address will be posted, so it&#8217;s a good idea to keep this address very secret.' ) . '</p>',
+	) );
 }
 
-get_current_screen()->add_help_tab( array(
-	'id'      => 'options-postemail',
-	'title'   => __('Post Via Email'),
-	'content' => $post_email_help,
-) );
-
-get_current_screen()->add_help_tab( array(
-	'id'      => 'options-remote',
-	'title'   => __('Remote Publishing'),
-	'content' => '<p>' . __('Remote Publishing allows you to use an external editor (like the iOS or Android app) to write your posts.') . '</p>',
-) );
-
-get_current_screen()->add_help_tab( array(
-	'id'      => 'options-services',
-	'title'   => __('Update Services'),
-	'content' => '<p>' . __('If desired, WordPress will automatically alert various services of your new posts.') . '</p>',
-) );
+/**
+ * Toggle site update services configuration functionality.
+ *
+ * @since 3.0.0
+ *
+ * @param bool True or false, based on whether update services configuration is enabled or not.
+ */
+if ( apply_filters( 'enable_update_services_configuration', true ) ) {
+	get_current_screen()->add_help_tab( array(
+		'id'      => 'options-services',
+		'title'   => __( 'Update Services' ),
+		'content' => '<p>' . __( 'If desired, WordPress will automatically alert various services of your new posts.' ) . '</p>',
+	) );
+}
 
 get_current_screen()->set_help_sidebar(
 	'<p><strong>' . __('For more information:') . '</strong></p>' .
@@ -58,22 +58,16 @@ get_current_screen()->set_help_sidebar(
 	'<p>' . __('<a href="http://wordpress.org/support/" target="_blank">Support Forums</a>') . '</p>'
 );
 
-include('./admin-header.php');
+include( ABSPATH . 'wp-admin/admin-header.php' );
 ?>
 
 <div class="wrap">
-<?php screen_icon(); ?>
 <h2><?php echo esc_html( $title ); ?></h2>
 
 <form method="post" action="options.php">
 <?php settings_fields('writing'); ?>
 
 <table class="form-table">
-<tr valign="top">
-<th scope="row"><label for="default_post_edit_rows"> <?php _e('Size of the post box') ?></label></th>
-<td><input name="default_post_edit_rows" type="text" id="default_post_edit_rows" value="<?php form_option('default_post_edit_rows'); ?>" class="small-text" />
-<?php _e('lines') ?></td>
-</tr>
 <tr valign="top">
 <th scope="row"><?php _e('Formatting') ?></th>
 <td><fieldset><legend class="screen-reader-text"><span><?php _e('Formatting') ?></span></legend>
@@ -92,22 +86,23 @@ wp_dropdown_categories(array('hide_empty' => 0, 'name' => 'default_category', 'o
 </td>
 </tr>
 <?php
-if ( current_theme_supports( 'post-formats' ) ) :
-	$post_formats = get_theme_support( 'post-formats' );
-	if ( is_array( $post_formats[0] ) ) :
+$post_formats = get_post_format_strings();
+unset( $post_formats['standard'] );
 ?>
 <tr valign="top">
 <th scope="row"><label for="default_post_format"><?php _e('Default Post Format') ?></label></th>
 <td>
 	<select name="default_post_format" id="default_post_format">
-		<option value="0"><?php _e('Standard'); ?></option>
-<?php foreach ( $post_formats[0] as $format ): ?>
-		<option<?php selected( get_option('default_post_format'), $format ); ?> value="<?php echo esc_attr( $format ); ?>"><?php echo esc_html( get_post_format_string( $format ) ); ?></option>
+		<option value="0"><?php echo get_post_format_string( 'standard' ); ?></option>
+<?php foreach ( $post_formats as $format_slug => $format_name ): ?>
+		<option<?php selected( get_option( 'default_post_format' ), $format_slug ); ?> value="<?php echo esc_attr( $format_slug ); ?>"><?php echo esc_html( $format_name ); ?></option>
 <?php endforeach; ?>
 	</select>
 </td>
 </tr>
-<?php endif; endif; ?>
+<?php
+if ( get_option( 'link_manager_enabled' ) ) :
+?>
 <tr valign="top">
 <th scope="row"><label for="default_link_category"><?php _e('Default Link Category') ?></label></th>
 <td>
@@ -116,21 +111,29 @@ wp_dropdown_categories(array('hide_empty' => 0, 'name' => 'default_link_category
 ?>
 </td>
 </tr>
-<?php do_settings_fields('writing', 'default'); ?>
+<?php endif; ?>
+
+<?php
+do_settings_fields('writing', 'default');
+do_settings_fields('writing', 'remote_publishing'); // A deprecated section.
+?>
 </table>
 
 <h3 class="title"><?php _e('Press This') ?></h3>
 <p><?php _e('Press This is a bookmarklet: a little app that runs in your browser and lets you grab bits of the web.');?></p>
 <p><?php _e('Use Press This to clip text, images and videos from any web page. Then edit and add more straight from Press This before you save or publish it in a post on your site.'); ?></p>
 <p><?php _e('Drag-and-drop the following link to your bookmarks bar or right click it and add it to your favorites for a posting shortcut.') ?></p>
-<p class="pressthis"><a onclick="return false;" oncontextmenu="if(window.navigator.userAgent.indexOf('WebKit')!=-1||window.navigator.userAgent.indexOf('MSIE')!=-1)jQuery('.pressthis-code').show().find('textarea').focus().select();return false;" href="<?php echo htmlspecialchars( get_shortcut_link() ); ?>"><span><?php _e('Press This') ?></span></a></p>
+<p class="pressthis"><a onclick="return false;" oncontextmenu="if(window.navigator.userAgent.indexOf('WebKit')!=-1||window.navigator.userAgent.indexOf('MSIE')!=-1){jQuery('.pressthis-code').show().find('textarea').focus().select();return false;}" href="<?php echo htmlspecialchars( get_shortcut_link() ); ?>"><span><?php _e('Press This') ?></span></a></p>
 <div class="pressthis-code" style="display:none;">
 	<p class="description"><?php _e('If your bookmarks toolbar is hidden: copy the code below, open your Bookmarks manager, create new bookmark, type Press This into the name field and paste the code into the URL field.') ?></p>
 	<p><textarea rows="5" cols="120" readonly="readonly"><?php echo htmlspecialchars( get_shortcut_link() ); ?></textarea></p>
 </div>
 
-<?php if ( apply_filters( 'enable_post_by_email_configuration', true ) ) { ?>
-<h3><?php _e('Post via e-mail') ?></h3>
+<?php
+/** This filter is documented in wp-admin/options.php */
+if ( apply_filters( 'enable_post_by_email_configuration', true ) ) {
+?>
+<h3 class="title"><?php _e('Post via e-mail') ?></h3>
 <p><?php printf(__('To post to WordPress by e-mail you must set up a secret e-mail account with POP3 access. Any mail received at this address will be posted, so it&#8217;s a good idea to keep this address very secret. Here are three random strings you could use: <kbd>%s</kbd>, <kbd>%s</kbd>, <kbd>%s</kbd>.'), wp_generate_password(8, false), wp_generate_password(8, false), wp_generate_password(8, false)) ?></p>
 
 <table class="form-table">
@@ -163,30 +166,11 @@ wp_dropdown_categories(array('hide_empty' => 0, 'name' => 'default_email_categor
 </table>
 <?php } ?>
 
-<h3><?php _e('Remote Publishing') ?></h3>
-<p><?php printf(__('To post to WordPress from a desktop blogging client or remote website that uses the Atom Publishing Protocol or one of the XML-RPC publishing interfaces you must enable them below.')) ?></p>
-<table class="form-table">
-<tr valign="top">
-<th scope="row"><?php _e('Atom Publishing Protocol') ?></th>
-<td><fieldset><legend class="screen-reader-text"><span><?php _e('Atom Publishing Protocol') ?></span></legend>
-<label for="enable_app">
-<input name="enable_app" type="checkbox" id="enable_app" value="1" <?php checked('1', get_option('enable_app')); ?> />
-<?php _e('Enable the Atom Publishing Protocol.') ?></label><br />
-</fieldset></td>
-</tr>
-<tr valign="top">
-<th scope="row"><?php _e('XML-RPC') ?></th>
-<td><fieldset><legend class="screen-reader-text"><span><?php _e('XML-RPC') ?></span></legend>
-<label for="enable_xmlrpc">
-<input name="enable_xmlrpc" type="checkbox" id="enable_xmlrpc" value="1" <?php checked('1', get_option('enable_xmlrpc')); ?> />
-<?php _e('Enable the WordPress, Movable Type, MetaWeblog and Blogger XML-RPC publishing protocols.') ?></label><br />
-</fieldset></td>
-</tr>
-<?php do_settings_fields('writing', 'remote_publishing'); ?>
-</table>
-
-<?php if ( apply_filters( 'enable_update_services_configuration', true ) ) { ?>
-<h3><?php _e('Update Services') ?></h3>
+<?php
+/** This filter is documented in wp-admin/options-writing.php */
+if ( apply_filters( 'enable_update_services_configuration', true ) ) {
+?>
+<h3 class="title"><?php _e('Update Services') ?></h3>
 
 <?php if ( 1 == get_option('blog_public') ) : ?>
 
@@ -196,7 +180,7 @@ wp_dropdown_categories(array('hide_empty' => 0, 'name' => 'default_email_categor
 
 <?php else : ?>
 
-	<p><?php printf(__('WordPress is not notifying any <a href="http://codex.wordpress.org/Update_Services">Update Services</a> because of your site&#8217;s <a href="%s">privacy settings</a>.'), 'options-privacy.php'); ?></p>
+	<p><?php printf(__('WordPress is not notifying any <a href="http://codex.wordpress.org/Update_Services">Update Services</a> because of your site&#8217;s <a href="%s">visibility settings</a>.'), 'options-reading.php'); ?></p>
 
 <?php endif; ?>
 <?php } // multisite ?>
@@ -207,4 +191,4 @@ wp_dropdown_categories(array('hide_empty' => 0, 'name' => 'default_email_categor
 </form>
 </div>
 
-<?php include('./admin-footer.php') ?>
+<?php include( ABSPATH . 'wp-admin/admin-footer.php' ); ?>

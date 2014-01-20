@@ -66,13 +66,21 @@ function wp_get_active_network_plugins() {
  * use the wp-content/blog-deleted.php, blog-inactive.php and
  * blog-suspended.php drop-ins.
  *
+ * @since 3.0.0
+ *
  * @return bool|string Returns true on success, or drop-in file to include.
  */
 function ms_site_check() {
-	global $wpdb, $current_blog;
+	$blog = get_blog_details();
 
-	// Allow short-circuiting
-	$check = apply_filters('ms_site_check', null);
+	/**
+	 * Filter checking the status of the current blog.
+	 *
+	 * @since 3.0.0
+	 *
+	 * @param bool null Whether to skip the blog status check. Default null.
+	*/
+	$check = apply_filters( 'ms_site_check', null );
 	if ( null !== $check )
 		return true;
 
@@ -80,21 +88,21 @@ function ms_site_check() {
 	if ( is_super_admin() )
 		return true;
 
-	if ( '1' == $current_blog->deleted ) {
+	if ( '1' == $blog->deleted ) {
 		if ( file_exists( WP_CONTENT_DIR . '/blog-deleted.php' ) )
 			return WP_CONTENT_DIR . '/blog-deleted.php';
 		else
 			wp_die( __( 'This user has elected to delete their account and the content is no longer available.' ), '', array( 'response' => 410 ) );
 	}
 
-	if ( '2' == $current_blog->deleted ) {
+	if ( '2' == $blog->deleted ) {
 		if ( file_exists( WP_CONTENT_DIR . '/blog-inactive.php' ) )
 			return WP_CONTENT_DIR . '/blog-inactive.php';
 		else
-			wp_die( sprintf( __( 'This site has not been activated yet. If you are having problems activating your site, please contact <a href="mailto:%1$s">%1$s</a>.' ), str_replace( '@', ' AT ', get_site_option( 'admin_email', "support@{$current_site->domain}" ) ) ) );
+			wp_die( sprintf( __( 'This site has not been activated yet. If you are having problems activating your site, please contact <a href="mailto:%1$s">%1$s</a>.' ), str_replace( '@', ' AT ', get_site_option( 'admin_email', 'support@' . get_current_site()->domain ) ) ) );
 	}
 
-	if ( $current_blog->archived == '1' || $current_blog->spam == '1' ) {
+	if ( $blog->archived == '1' || $blog->spam == '1' ) {
 		if ( file_exists( WP_CONTENT_DIR . '/blog-suspended.php' ) )
 			return WP_CONTENT_DIR . '/blog-suspended.php';
 		else
@@ -232,13 +240,13 @@ function ms_not_installed() {
 
 	wp_load_translations_early();
 
-	$title = __( 'Error establishing database connection' );
+	$title = __( 'Error establishing a database connection' );
 	$msg  = '<h1>' . $title . '</h1>';
 	if ( ! is_admin() )
 		die( $msg );
 	$msg .= '<p>' . __( 'If your site does not display, please contact the owner of this network.' ) . '';
 	$msg .= ' ' . __( 'If you are the owner of this network please check that MySQL is running properly and all tables are error free.' ) . '</p>';
-	if ( false && !$wpdb->get_var( "SHOW TABLES LIKE '$wpdb->site'" ) )
+	if ( ! $wpdb->get_var( "SHOW TABLES LIKE '$wpdb->site'" ) )
 		$msg .= '<p>' . sprintf( __( '<strong>Database tables are missing.</strong> This means that MySQL is not running, WordPress was not installed properly, or someone deleted <code>%s</code>. You really should look at your database now.' ), $wpdb->site ) . '</p>';
 	else
 		$msg .= '<p>' . sprintf( __( '<strong>Could not find site <code>%1$s</code>.</strong> Searched for table <code>%2$s</code> in database <code>%3$s</code>. Is that right?' ), rtrim( $domain . $path, '/' ), $wpdb->blogs, DB_NAME ) . '</p>';

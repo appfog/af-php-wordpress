@@ -7,7 +7,7 @@
  */
 
 /** WordPress Administration Bootstrap */
-require_once( './admin.php' );
+require_once( dirname( __FILE__ ) . '/admin.php' );
 
 if ( ! current_user_can( 'list_users' ) )
 	wp_die( __( 'Cheatin&#8217; uh?' ) );
@@ -64,9 +64,9 @@ get_current_screen()->set_help_sidebar(
 );
 
 if ( empty($_REQUEST) ) {
-	$referer = '<input type="hidden" name="wp_http_referer" value="'. esc_attr(stripslashes($_SERVER['REQUEST_URI'])) . '" />';
+	$referer = '<input type="hidden" name="wp_http_referer" value="'. esc_attr( wp_unslash( $_SERVER['REQUEST_URI'] ) ) . '" />';
 } elseif ( isset($_REQUEST['wp_http_referer']) ) {
-	$redirect = remove_query_arg(array('wp_http_referer', 'updated', 'delete_count'), stripslashes($_REQUEST['wp_http_referer']));
+	$redirect = remove_query_arg(array('wp_http_referer', 'updated', 'delete_count'), wp_unslash( $_REQUEST['wp_http_referer'] ) );
 	$referer = '<input type="hidden" name="wp_http_referer" value="' . esc_attr($redirect) . '" />';
 } else {
 	$redirect = 'users.php';
@@ -74,6 +74,25 @@ if ( empty($_REQUEST) ) {
 }
 
 $update = '';
+
+/**
+ * @since 3.5.0
+ * @access private
+ */
+function delete_users_add_js() { ?>
+<script>
+jQuery(document).ready( function($) {
+	var submit = $('#submit').prop('disabled', true);
+	$('input[name=delete_option]').one('change', function() {
+		submit.prop('disabled', false);
+	});
+	$('#reassign_user').focus( function() {
+		$('#delete_option1').prop('checked', true).trigger('change');
+	});
+});
+</script>
+<?php
+}
 
 switch ( $wp_list_table->current_action() ) {
 
@@ -111,7 +130,7 @@ case 'promote':
 		if ( is_multisite() && !is_user_member_of_blog( $id ) )
 			wp_die(__('Cheatin&#8217; uh?'));
 
-		$user = new WP_User($id);
+		$user = get_userdata( $id );
 		$user->set_role($_REQUEST['new_role']);
 	}
 
@@ -131,16 +150,22 @@ case 'dodelete':
 		exit();
 	}
 
+	$userids = array_map( 'intval', (array) $_REQUEST['users'] );
+
+	if ( empty( $_REQUEST['delete_option'] ) ) {
+		$url = self_admin_url( 'users.php?action=delete&users[]=' . implode( '&users[]=', $userids ) . '&error=true' );
+		$url = str_replace( '&amp;', '&', wp_nonce_url( $url, 'bulk-users' ) );
+		wp_redirect( $url );
+		exit;
+	}
+
 	if ( ! current_user_can( 'delete_users' ) )
 		wp_die(__('You can&#8217;t delete users.'));
 
-	$userids = $_REQUEST['users'];
 	$update = 'del';
 	$delete_count = 0;
 
-	foreach ( (array) $userids as $id) {
-		$id = (int) $id;
-
+	foreach ( $userids as $id ) {
 		if ( ! current_user_can( 'delete_user', $id ) )
 			wp_die(__( 'You can&#8217;t delete that user.' ) );
 
@@ -150,12 +175,10 @@ case 'dodelete':
 		}
 		switch ( $_REQUEST['delete_option'] ) {
 		case 'delete':
-			if ( current_user_can('delete_user', $id) )
-				wp_delete_user($id);
+			wp_delete_user( $id );
 			break;
 		case 'reassign':
-			if ( current_user_can('delete_user', $id) )
-				wp_delete_user($id, $_REQUEST['reassign_user']);
+			wp_delete_user( $id, $_REQUEST['reassign_user'] );
 			break;
 		}
 		++$delete_count;
@@ -182,42 +205,47 @@ case 'delete':
 		$errors = new WP_Error( 'edit_users', __( 'You can&#8217;t delete users.' ) );
 
 	if ( empty($_REQUEST['users']) )
-		$userids = array(intval($_REQUEST['user']));
+		$userids = array( intval( $_REQUEST['user'] ) );
 	else
-		$userids = (array) $_REQUEST['users'];
+		$userids = array_map( 'intval', (array) $_REQUEST['users'] );
 
-	include ('admin-header.php');
+	add_action( 'admin_head', 'delete_users_add_js' );
+
+	include( ABSPATH . 'wp-admin/admin-header.php' );
 ?>
 <form action="" method="post" name="updateusers" id="updateusers">
 <?php wp_nonce_field('delete-users') ?>
 <?php echo $referer; ?>
 
 <div class="wrap">
-<?php screen_icon(); ?>
 <h2><?php _e('Delete Users'); ?></h2>
+<?php if ( isset( $_REQUEST['error'] ) ) : ?>
+<div class="error">
+	<p><strong><?php _e( 'ERROR:' ); ?></strong> <?php _e( 'Please select an option.' ); ?></p>
+</div>
+<?php endif; ?>
 <p><?php echo _n( 'You have specified this user for deletion:', 'You have specified these users for deletion:', count( $userids ) ); ?></p>
 <ul>
 <?php
 	$go_delete = 0;
 	foreach ( $userids as $id ) {
-		$id = (int) $id;
-		$user = new WP_User($id);
+		$user = get_userdata( $id );
 		if ( $id == $current_user->ID ) {
-			echo "<li>" . sprintf(__('ID #%1s: %2s <strong>The current user will not be deleted.</strong>'), $id, $user->user_login) . "</li>\n";
+			echo "<li>" . sprintf(__('ID #%1$s: %2$s <strong>The current user will not be deleted.</strong>'), $id, $user->user_login) . "</li>\n";
 		} else {
-			echo "<li><input type=\"hidden\" name=\"users[]\" value=\"" . esc_attr($id) . "\" />" . sprintf(__('ID #%1s: %2s'), $id, $user->user_login) . "</li>\n";
+			echo "<li><input type=\"hidden\" name=\"users[]\" value=\"" . esc_attr($id) . "\" />" . sprintf(__('ID #%1$s: %2$s'), $id, $user->user_login) . "</li>\n";
 			$go_delete++;
 		}
 	}
 	?>
 	</ul>
 <?php if ( $go_delete ) : ?>
-	<fieldset><p><legend><?php echo _n( 'What should be done with posts and links owned by this user?', 'What should be done with posts and links owned by these users?', $go_delete ); ?></legend></p>
+	<fieldset><p><legend><?php echo _n( 'What should be done with posts owned by this user?', 'What should be done with posts owned by these users?', $go_delete ); ?></legend></p>
 	<ul style="list-style:none;">
-		<li><label><input type="radio" id="delete_option0" name="delete_option" value="delete" checked="checked" />
-		<?php _e('Delete all posts and links.'); ?></label></li>
+		<li><label><input type="radio" id="delete_option0" name="delete_option" value="delete" />
+		<?php _e('Delete all posts.'); ?></label></li>
 		<li><input type="radio" id="delete_option1" name="delete_option" value="reassign" />
-		<?php echo '<label for="delete_option1">'.__('Attribute all posts and links to:').'</label>';
+		<?php echo '<label for="delete_option1">' . __( 'Attribute all posts to:' ) . '</label> ';
 		wp_dropdown_users( array( 'name' => 'reassign_user', 'exclude' => array_diff( $userids, array($current_user->ID) ) ) ); ?></li>
 	</ul></fieldset>
 	<input type="hidden" name="action" value="dodelete" />
@@ -287,14 +315,13 @@ case 'remove':
 	else
 		$userids = $_REQUEST['users'];
 
-	include ('admin-header.php');
+	include( ABSPATH . 'wp-admin/admin-header.php' );
 ?>
 <form action="" method="post" name="updateusers" id="updateusers">
 <?php wp_nonce_field('remove-users') ?>
 <?php echo $referer; ?>
 
 <div class="wrap">
-<?php screen_icon(); ?>
 <h2><?php _e('Remove Users from Site'); ?></h2>
 <p><?php _e('You have specified these users for removal:'); ?></p>
 <ul>
@@ -302,13 +329,13 @@ case 'remove':
 	$go_remove = false;
  	foreach ( $userids as $id ) {
 		$id = (int) $id;
- 		$user = new WP_User($id);
+ 		$user = get_userdata( $id );
 		if ( $id == $current_user->ID && !is_super_admin() ) {
-			echo "<li>" . sprintf(__('ID #%1s: %2s <strong>The current user will not be removed.</strong>'), $id, $user->user_login) . "</li>\n";
+			echo "<li>" . sprintf(__('ID #%1$s: %2$s <strong>The current user will not be removed.</strong>'), $id, $user->user_login) . "</li>\n";
 		} elseif ( !current_user_can('remove_user', $id) ) {
-			echo "<li>" . sprintf(__('ID #%1s: %2s <strong>You don\'t have permission to remove this user.</strong>'), $id, $user->user_login) . "</li>\n";
+			echo "<li>" . sprintf(__('ID #%1$s: %2$s <strong>You don\'t have permission to remove this user.</strong>'), $id, $user->user_login) . "</li>\n";
 		} else {
-			echo "<li><input type=\"hidden\" name=\"users[]\" value=\"{$id}\" />" . sprintf(__('ID #%1s: %2s'), $id, $user->user_login) . "</li>\n";
+			echo "<li><input type=\"hidden\" name=\"users[]\" value=\"{$id}\" />" . sprintf(__('ID #%1$s: %2$s'), $id, $user->user_login) . "</li>\n";
 			$go_remove = true;
 		}
  	}
@@ -328,7 +355,7 @@ break;
 default:
 
 	if ( !empty($_GET['_wp_http_referer']) ) {
-		wp_redirect(remove_query_arg(array('_wp_http_referer', '_wpnonce'), stripslashes($_SERVER['REQUEST_URI'])));
+		wp_redirect( remove_query_arg( array( '_wp_http_referer', '_wpnonce'), wp_unslash( $_SERVER['REQUEST_URI'] ) ) );
 		exit;
 	}
 
@@ -339,7 +366,7 @@ default:
 		exit;
 	}
 
-	include('./admin-header.php');
+	include( ABSPATH . 'wp-admin/admin-header.php' );
 
 	$messages = array();
 	if ( isset($_GET['update']) ) :
@@ -352,7 +379,7 @@ default:
 		case 'add':
 			if ( isset( $_GET['id'] ) && ( $user_id = $_GET['id'] ) && current_user_can( 'edit_user', $user_id ) ) {
 				$messages[] = '<div id="message" class="updated"><p>' . sprintf( __( 'New user created. <a href="%s">Edit user</a>' ),
-					esc_url( add_query_arg( 'wp_http_referer', urlencode( stripslashes( $_SERVER['REQUEST_URI'] ) ),
+					esc_url( add_query_arg( 'wp_http_referer', urlencode( wp_unslash( $_SERVER['REQUEST_URI'] ) ),
 						self_admin_url( 'user-edit.php?user_id=' . $user_id ) ) ) ) . '</p></div>';
 			} else {
 				$messages[] = '<div id="message" class="updated"><p>' . __( 'New user created.' ) . '</p></div>';
@@ -396,7 +423,6 @@ if ( ! empty($messages) ) {
 } ?>
 
 <div class="wrap">
-<?php screen_icon(); ?>
 <h2>
 <?php
 echo esc_html( $title );
@@ -426,4 +452,4 @@ break;
 
 } // end of the $doaction switch
 
-include('./admin-footer.php');
+include( ABSPATH . 'wp-admin/admin-footer.php' );

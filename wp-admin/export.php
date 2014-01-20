@@ -7,16 +7,21 @@
  */
 
 /** Load WordPress Bootstrap */
-require_once ('admin.php');
+require_once( dirname( __FILE__ ) . '/admin.php' );
 
 if ( !current_user_can('export') )
 	wp_die(__('You do not have sufficient permissions to export the content of this site.'));
 
 /** Load WordPress export API */
-require_once('./includes/export.php');
+require_once( ABSPATH . 'wp-admin/includes/export.php' );
 $title = __('Export');
 
-function add_js() {
+/**
+ * Display JavaScript on the page.
+ *
+ * @since 3.5.0
+ */
+function export_add_js() {
 ?>
 <script type="text/javascript">
 //<![CDATA[
@@ -36,7 +41,7 @@ function add_js() {
 </script>
 <?php
 }
-add_action( 'admin_head', 'add_js' );
+add_action( 'admin_head', 'export_add_js' );
 
 get_current_screen()->add_help_tab( array(
 	'id'      => 'overview',
@@ -89,12 +94,31 @@ if ( isset( $_GET['download'] ) ) {
 		$args['content'] = $_GET['content'];
 	}
 
+	/**
+	 * Filter the export args.
+	 *
+	 * @since 3.5.0
+	 *
+	 * @param array $args The arguments to send to the exporter.
+	 */
+	$args = apply_filters( 'export_args', $args );
+
 	export_wp( $args );
 	die();
 }
 
-require_once ('admin-header.php');
+require_once( ABSPATH . 'wp-admin/admin-header.php' );
 
+/**
+ * Create the date options fields for exporting a given post type.
+ *
+ * @global wpdb      $wpdb      WordPress database object.
+ * @global WP_Locale $wp_locale Date and Time Locale object.
+ *
+ * @since 3.1.0
+ *
+ * @param string $post_type The post type. Default 'post'.
+ */
 function export_date_options( $post_type = 'post' ) {
 	global $wpdb, $wp_locale;
 
@@ -120,7 +144,6 @@ function export_date_options( $post_type = 'post' ) {
 ?>
 
 <div class="wrap">
-<?php screen_icon(); ?>
 <h2><?php echo esc_html( $title ); ?></h2>
 
 <p><?php _e('When you click the button below WordPress will create an XML file for you to save to your computer.'); ?></p>
@@ -204,8 +227,17 @@ function export_date_options( $post_type = 'post' ) {
 <p><label><input type="radio" name="content" value="<?php echo esc_attr( $post_type->name ); ?>" /> <?php echo esc_html( $post_type->label ); ?></label></p>
 <?php endforeach; ?>
 
-<?php submit_button( __('Download Export File'), 'secondary' ); ?>
+<?php
+/**
+ * Fires after the export filters form.
+ *
+ * @since 3.5.0
+ */
+do_action( 'export_filters' );
+?>
+
+<?php submit_button( __('Download Export File') ); ?>
 </form>
 </div>
 
-<?php include('admin-footer.php'); ?>
+<?php include( ABSPATH . 'wp-admin/admin-footer.php' ); ?>

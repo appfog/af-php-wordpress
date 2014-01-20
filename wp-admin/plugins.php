@@ -7,16 +7,9 @@
  */
 
 /** WordPress Administration Bootstrap */
-require_once('./admin.php');
+require_once( dirname( __FILE__ ) . '/admin.php' );
 
-if ( is_multisite() ) {
-	$menu_perms = get_site_option( 'menu_items', array() );
-
-	if ( empty( $menu_perms['plugins'] ) && ! current_user_can( 'manage_network_plugins' ) )
-		wp_die( __( 'Cheatin&#8217; uh?' ) );
-}
-
-if ( !current_user_can('activate_plugins') )
+if ( ! current_user_can('activate_plugins') )
 	wp_die( __( 'You do not have sufficient permissions to manage plugins for this site.' ) );
 
 $wp_list_table = _get_list_table('WP_Plugins_List_Table');
@@ -37,6 +30,11 @@ if ( $action ) {
 			if ( ! current_user_can('activate_plugins') )
 				wp_die(__('You do not have sufficient permissions to activate plugins for this site.'));
 
+			if ( is_multisite() && ! is_network_admin() && is_network_only_plugin( $plugin ) ) {
+				wp_redirect( self_admin_url("plugins.php?plugin_status=$status&paged=$page&s=$s") );
+				exit;
+			}
+
 			check_admin_referer('activate-plugin_' . $plugin);
 
 			$result = activate_plugin($plugin, self_admin_url('plugins.php?error=true&plugin=' . $plugin), is_network_admin() );
@@ -51,11 +49,6 @@ if ( $action ) {
 			}
 
 			if ( ! is_network_admin() ) {
-				if ( is_network_only_plugin( $plugin ) ) {
-					wp_redirect( self_admin_url("plugins.php?plugin_status=$status&paged=$page&s=$s") );
-					exit;
-				}
-
 				$recent = (array) get_option( 'recently_activated' );
 				unset( $recent[ $plugin ] );
 				update_option( 'recently_activated', $recent );
@@ -123,7 +116,6 @@ if ( $action ) {
 			require_once(ABSPATH . 'wp-admin/admin-header.php');
 
 			echo '<div class="wrap">';
-			screen_icon();
 			echo '<h2>' . esc_html( $title ) . '</h2>';
 
 			$url = self_admin_url('update.php?action=update-selected&amp;plugins=' . urlencode( join(',', $plugins) ));
@@ -154,7 +146,8 @@ if ( $action ) {
 				include( WP_PLUGIN_DIR . '/' . $plugin );
 			}
 			plugin_sandbox_scrape( $plugin );
-			do_action('activate_' . $plugin);
+			/** This action is documented in wp-admin/includes/plugins.php */
+			do_action( "activate_{$plugin}" );
 			exit;
 			break;
 		case 'deactivate':
@@ -265,7 +258,6 @@ if ( $action ) {
 							}
 						}
 					}
-					screen_icon();
 					$plugins_to_delete = count( $plugin_info );
 					echo '<h2>' . _n( 'Delete Plugin', 'Delete Plugins', $plugins_to_delete ) . '</h2>';
 				?>
@@ -347,7 +339,7 @@ get_current_screen()->add_help_tab( array(
 'title'		=> __('Overview'),
 'content'	=>
 	'<p>' . __('Plugins extend and expand the functionality of WordPress. Once a plugin is installed, you may activate it or deactivate it here.') . '</p>' .
-	'<p>' . sprintf(__('You can find additional plugins for your site by using the <a href="%1$s">Plugin Browser/Installer</a> functionality or by browsing the <a href="%2$s" target="_blank">WordPress Plugin Directory</a> directly and installing new plugins manually. To manually install a plugin you generally just need to upload the plugin file into your <code>/wp-content/plugins</code> directory. Once a plugin has been installed, you can activate it here.'), 'plugin-install.php', 'http://wordpress.org/extend/plugins/') . '</p>'
+	'<p>' . sprintf(__('You can find additional plugins for your site by using the <a href="%1$s">Plugin Browser/Installer</a> functionality or by browsing the <a href="%2$s" target="_blank">WordPress Plugin Directory</a> directly and installing new plugins manually. To manually install a plugin you generally just need to upload the plugin file into your <code>/wp-content/plugins</code> directory. Once a plugin has been installed, you can activate it here.'), 'plugin-install.php', 'http://wordpress.org/plugins/') . '</p>'
 ) );
 get_current_screen()->add_help_tab( array(
 'id'		=> 'compatibility-problems',
@@ -392,8 +384,9 @@ if ( !empty($invalid) )
 	?>
 	</div>
 <?php elseif ( isset($_GET['deleted']) ) :
-		$delete_result = get_transient('plugins_delete_result_'.$user_ID);
-		delete_transient('plugins_delete_result'); //Delete it once we're done.
+		$delete_result = get_transient( 'plugins_delete_result_' . $user_ID );
+		// Delete it once we're done.
+		delete_transient( 'plugins_delete_result_' . $user_ID );
 
 		if ( is_wp_error($delete_result) ) : ?>
 		<div id="message" class="updated"><p><?php printf( __('Plugin could not be deleted due to an error: %s'), $delete_result->get_error_message() ); ?></p></div>
@@ -413,7 +406,6 @@ if ( !empty($invalid) )
 <?php endif; ?>
 
 <div class="wrap">
-<?php screen_icon(); ?>
 <h2><?php echo esc_html( $title );
 if ( ( ! is_multisite() || is_network_admin() ) && current_user_can('install_plugins') ) { ?>
  <a href="<?php echo self_admin_url( 'plugin-install.php' ); ?>" class="add-new-h2"><?php echo esc_html_x('Add New', 'plugin'); ?></a>
@@ -422,7 +414,21 @@ if ( $s )
 	printf( '<span class="subtitle">' . __('Search results for &#8220;%s&#8221;') . '</span>', esc_html( $s ) ); ?>
 </h2>
 
-<?php do_action( 'pre_current_active_plugins', $plugins['all'] ) ?>
+<?php
+/**
+ * Fires before the plugins list table is rendered.
+ *
+ * This hook also fires before the plugins list table is rendered in the Network Admin.
+ *
+ * Please note: The 'active' portion of the hook name does not refer to whether the current
+ * view is for active plugins, but rather all plugins actively-installed.
+ *
+ * @since 3.0.0
+ *
+ * @param array $plugins_all An array containing all installed plugins.
+ */
+do_action( 'pre_current_active_plugins', $plugins['all'] );
+?>
 
 <?php $wp_list_table->views(); ?>
 

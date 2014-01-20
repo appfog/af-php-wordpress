@@ -1,4 +1,12 @@
 <?php
+/**
+ * The WordPress Toolbar
+ *
+ * @since 3.1.0
+ *
+ * @package WordPress
+ * @subpackage Toolbar
+ */
 class WP_Admin_Bar {
 	private $nodes = array();
 	private $bound = false;
@@ -38,7 +46,11 @@ class WP_Admin_Bar {
 		add_action( 'admin_head', 'wp_admin_bar_header' );
 
 		if ( current_theme_supports( 'admin-bar' ) ) {
-			$admin_bar_args = get_theme_support( 'admin-bar' ); // add_theme_support( 'admin-bar', array( 'callback' => '__return_false') );
+			/**
+			 * To remove the default padding styles from WordPress for the Toolbar, use the following code:
+			 * add_theme_support( 'admin-bar', array( 'callback' => '__return_false' ) );
+			 */
+			$admin_bar_args = get_theme_support( 'admin-bar' );
 			$header_callback = $admin_bar_args[0]['callback'];
 		}
 
@@ -50,6 +62,11 @@ class WP_Admin_Bar {
 		wp_enqueue_script( 'admin-bar' );
 		wp_enqueue_style( 'admin-bar' );
 
+		/**
+		 * Fires after WP_Admin_Bar is initialized.
+		 *
+		 * @since 3.1.0
+		 */
 		do_action( 'admin_bar_init' );
 	}
 
@@ -104,7 +121,7 @@ class WP_Admin_Bar {
 			$defaults = get_object_vars( $maybe_defaults );
 
 		// Do the same for 'meta' items.
-		if ( ! empty( $defaults['meta'] ) && empty( $args['meta'] ) )
+		if ( ! empty( $defaults['meta'] ) && ! empty( $args['meta'] ) )
 			$args['meta'] = wp_parse_args( $args['meta'], $defaults['meta'] );
 
 		$args = wp_parse_args( $args, $defaults );
@@ -149,13 +166,13 @@ class WP_Admin_Bar {
 	}
 
 	final public function get_nodes() {
-	   if ( ! $nodes = $this->_get_nodes() )
-	      return;
+		if ( ! $nodes = $this->_get_nodes() )
+			return;
 
-	   foreach ( $nodes as &$node ) {
-	       $node = clone $node;
-	   }
-	   return $nodes;
+		foreach ( $nodes as &$node ) {
+			$node = clone $node;
+		}
+		return $nodes;
 	}
 
 	final protected function _get_nodes() {
@@ -184,7 +201,7 @@ class WP_Admin_Bar {
 	/**
 	 * Remove a node.
 	 *
-	 * @return object The removed node.
+	 * @param string The ID of the item.
 	 */
 	public function remove_node( $id ) {
 		$this->_unset_node( $id );
@@ -237,8 +254,9 @@ class WP_Admin_Bar {
 
 			if ( $node->type == 'group' ) {
 				if ( empty( $node->meta['class'] ) )
-					$node->meta['class'] = '';
-				$node->meta['class'] .= ' ' . $group_class;
+					$node->meta['class'] = $group_class;
+				else
+					$node->meta['class'] .= ' ' . $group_class;
 			}
 
 			// Items in items aren't allowed. Wrap nested items in 'default' groups.
@@ -339,11 +357,15 @@ class WP_Admin_Bar {
 
 		?>
 		<div id="wpadminbar" class="<?php echo $class; ?>" role="navigation">
-			<div class="quicklinks">
+			<a class="screen-reader-shortcut" href="#wp-toolbar" tabindex="1"><?php _e('Skip to toolbar'); ?></a>
+			<div class="quicklinks" id="wp-toolbar" role="navigation" aria-label="<?php esc_attr_e('Top navigation toolbar.'); ?>" tabindex="0">
 				<?php foreach ( $root->children as $group ) {
 					$this->_render_group( $group );
 				} ?>
 			</div>
+			<?php if ( is_user_logged_in() ) : ?>
+			<a class="screen-reader-shortcut" href="<?php echo esc_url( wp_logout_url() ); ?>"><?php _e('Log Out'); ?></a>
+			<?php endif; ?>
 		</div>
 
 		<?php
@@ -367,9 +389,12 @@ class WP_Admin_Bar {
 		if ( $node->type != 'group' || empty( $node->children ) )
 			return;
 
-		$class = empty( $node->meta['class'] ) ? '' : $node->meta['class'];
+		if ( ! empty( $node->meta['class'] ) )
+			$class = ' class="' . esc_attr( trim( $node->meta['class'] ) ) . '"';
+		else
+			$class = '';
 
-		?><ul id="<?php echo esc_attr( 'wp-admin-bar-' . $node->id ); ?>" class="<?php echo esc_attr( $class ); ?>"><?php
+		?><ul id="<?php echo esc_attr( 'wp-admin-bar-' . $node->id ); ?>"<?php echo $class; ?>><?php
 			foreach ( $node->children as $item ) {
 				$this->_render_item( $item );
 			}
@@ -383,22 +408,25 @@ class WP_Admin_Bar {
 		$is_parent = ! empty( $node->children );
 		$has_link  = ! empty( $node->href );
 
-		$tabindex = isset( $node->meta['tabindex'] ) ? (int) $node->meta['tabindex'] : 10;
+		$tabindex = isset( $node->meta['tabindex'] ) ? (int) $node->meta['tabindex'] : '';
+		$aria_attributes = $tabindex ? 'tabindex="' . $tabindex . '"' : '';
 
 		$menuclass = '';
-		$aria_attributes = 'tabindex="' . $tabindex . '"';
 
 		if ( $is_parent ) {
-			$menuclass = 'menupop';
+			$menuclass = 'menupop ';
 			$aria_attributes .= ' aria-haspopup="true"';
 		}
 
 		if ( ! empty( $node->meta['class'] ) )
-			$menuclass .= ' ' . $node->meta['class'];
+			$menuclass .= $node->meta['class'];
+
+		if ( $menuclass )
+			$menuclass = ' class="' . esc_attr( trim( $menuclass ) ) . '"';
 
 		?>
 
-		<li id="<?php echo esc_attr( 'wp-admin-bar-' . $node->id ); ?>" class="<?php echo esc_attr( $menuclass ); ?>"><?php
+		<li id="<?php echo esc_attr( 'wp-admin-bar-' . $node->id ); ?>"<?php echo $menuclass; ?>><?php
 			if ( $has_link ):
 				?><a class="ab-item" <?php echo $aria_attributes; ?> href="<?php echo esc_url( $node->href ) ?>"<?php
 					if ( ! empty( $node->meta['onclick'] ) ) :
@@ -454,6 +482,7 @@ class WP_Admin_Bar {
 		add_action( 'admin_bar_menu', 'wp_admin_bar_my_account_item', 7 );
 
 		// Site related.
+		add_action( 'admin_bar_menu', 'wp_admin_bar_sidebar_toggle', 0 );
 		add_action( 'admin_bar_menu', 'wp_admin_bar_wp_menu', 10 );
 		add_action( 'admin_bar_menu', 'wp_admin_bar_my_sites_menu', 20 );
 		add_action( 'admin_bar_menu', 'wp_admin_bar_site_menu', 30 );
@@ -468,6 +497,11 @@ class WP_Admin_Bar {
 
 		add_action( 'admin_bar_menu', 'wp_admin_bar_add_secondary_groups', 200 );
 
+		/**
+		 * Fires after menus are added to the menu bar.
+		 *
+		 * @since 3.1.0
+		 */
 		do_action( 'add_admin_bar_menus' );
 	}
 }
