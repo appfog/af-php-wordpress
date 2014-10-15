@@ -4,7 +4,7 @@ $services_json = json_decode($services,true);
 $mysql_config = $services_json["mysql-5.1"][0]["credentials"];
 
 // ** MySQL settings from resource descriptor ** //
-if (getenv("VCAP_SERVICES") {
+if (getenv("VCAP_SERVICES")) {
 	define('DB_NAME', $mysql_config["name"]);
 	define('DB_USER', $mysql_config["user"]);
 	define('DB_PASSWORD', $mysql_config["password"]);
