@@ -15,7 +15,7 @@
 <!--[if IE 8]>
 <html class="ie ie8" <?php language_attributes(); ?>>
 <![endif]-->
-<!--[if !(IE 7) | !(IE 8) ]><!-->
+<!--[if !(IE 7) & !(IE 8)]><!-->
 <html <?php language_attributes(); ?>>
 <!--<![endif]-->
 <head>
@@ -49,7 +49,7 @@
 			</div>
 
 			<nav id="primary-navigation" class="site-navigation primary-navigation" role="navigation">
-				<h1 class="menu-toggle"><?php _e( 'Primary Menu', 'twentyfourteen' ); ?></h1>
+				<button class="menu-toggle"><?php _e( 'Primary Menu', 'twentyfourteen' ); ?></button>
 				<a class="screen-reader-text skip-link" href="#content"><?php _e( 'Skip to content', 'twentyfourteen' ); ?></a>
 				<?php wp_nav_menu( array( 'theme_location' => 'primary', 'menu_class' => 'nav-menu' ) ); ?>
 			</nav>

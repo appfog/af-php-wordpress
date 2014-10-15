@@ -13,11 +13,14 @@ if ( ! function_exists( 'twentyfourteen_paging_nav' ) ) :
  *
  * @since Twenty Fourteen 1.0
  *
- * @return void
+ * @global WP_Query   $wp_query   WordPress Query object.
+ * @global WP_Rewrite $wp_rewrite WordPress Rewrite object.
  */
 function twentyfourteen_paging_nav() {
+	global $wp_query, $wp_rewrite;
+
 	// Don't print empty markup if there's only one page.
-	if ( $GLOBALS['wp_query']->max_num_pages < 2 ) {
+	if ( $wp_query->max_num_pages < 2 ) {
 		return;
 	}
 
@@ -33,14 +36,14 @@ function twentyfourteen_paging_nav() {
 	$pagenum_link = remove_query_arg( array_keys( $query_args ), $pagenum_link );
 	$pagenum_link = trailingslashit( $pagenum_link ) . '%_%';
 
-	$format  = $GLOBALS['wp_rewrite']->using_index_permalinks() && ! strpos( $pagenum_link, 'index.php' ) ? 'index.php/' : '';
-	$format .= $GLOBALS['wp_rewrite']->using_permalinks() ? user_trailingslashit( 'page/%#%', 'paged' ) : '?paged=%#%';
+	$format  = $wp_rewrite->using_index_permalinks() && ! strpos( $pagenum_link, 'index.php' ) ? 'index.php/' : '';
+	$format .= $wp_rewrite->using_permalinks() ? user_trailingslashit( $wp_rewrite->pagination_base . '/%#%', 'paged' ) : '?paged=%#%';
 
 	// Set up paginated links.
 	$links = paginate_links( array(
 		'base'     => $pagenum_link,
 		'format'   => $format,
-		'total'    => $GLOBALS['wp_query']->max_num_pages,
+		'total'    => $wp_query->max_num_pages,
 		'current'  => $paged,
 		'mid_size' => 1,
 		'add_args' => array_map( 'urlencode', $query_args ),
@@ -67,8 +70,6 @@ if ( ! function_exists( 'twentyfourteen_post_nav' ) ) :
  * Display navigation to next/previous post when applicable.
  *
  * @since Twenty Fourteen 1.0
- *
- * @return void
  */
 function twentyfourteen_post_nav() {
 	// Don't print empty markup if there's nowhere to navigate.
@@ -102,8 +103,6 @@ if ( ! function_exists( 'twentyfourteen_posted_on' ) ) :
  * Print HTML with meta information for the current post-date/time and author.
  *
  * @since Twenty Fourteen 1.0
- *
- * @return void
  */
 function twentyfourteen_posted_on() {
 	if ( is_sticky() && is_home() && ! is_paged() ) {
@@ -154,8 +153,6 @@ function twentyfourteen_categorized_blog() {
  * Flush out the transients used in twentyfourteen_categorized_blog.
  *
  * @since Twenty Fourteen 1.0
- *
- * @return void
  */
 function twentyfourteen_category_transient_flusher() {
 	// Like, beat it. Dig?
@@ -171,11 +168,9 @@ add_action( 'save_post',     'twentyfourteen_category_transient_flusher' );
  * views, or a div element when on single views.
  *
  * @since Twenty Fourteen 1.0
- *
- * @return void
-*/
+ */
 function twentyfourteen_post_thumbnail() {
-	if ( post_password_required() || ! has_post_thumbnail() ) {
+	if ( post_password_required() || is_attachment() || ! has_post_thumbnail() ) {
 		return;
 	}
 
