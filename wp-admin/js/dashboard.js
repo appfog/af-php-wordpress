@@ -64,6 +64,9 @@ jQuery(document).ready( function($) {
 	/* QuickPress */
 	quickPressLoad = function() {
 		var act = $('#quickpost-action'), t;
+
+		$( '#quick-press .submit input[type="submit"], #quick-press .submit input[type="reset"]' ).prop( 'disabled' , false );
+
 		t = $('#quick-press').submit( function() {
 			$('#dashboard_quick_press #publishing-action .spinner').show();
 			$('#quick-press .submit input[type="submit"], #quick-press .submit input[type="reset"]').prop('disabled', true);
@@ -123,13 +126,11 @@ jQuery(document).ready( function($) {
 
 	$( '.meta-box-sortables' ).sortable( 'option', 'containment', 'document' );
 
-	// Activity Widget
-	$( '.show-more a' ).on( 'click', function(e) {
-		$( this ).fadeOut().closest('.activity-block').find( 'li.hidden' ).fadeIn().removeClass( 'hidden' );
-		e.preventDefault();
-	});
-
 	function autoResizeTextarea() {
+		if ( document.documentMode && document.documentMode < 9 ) {
+			return;
+		}
+
 		// Add a hidden div. We'll copy over the text from the textarea to measure its height.
 		$('body').append( '<div class="quick-draft-textarea-clone" style="display: none;"></div>' );
 
@@ -159,9 +160,9 @@ jQuery(document).ready( function($) {
 		editor.on('focus input propertychange', function() {
 			var $this = $(this),
 				// &nbsp; is to ensure that the height of a final trailing newline is included.
-				textareaContent = $this.val().replace(/\n/g, '<br>') + '&nbsp;',
+				textareaContent = $this.val() + '&nbsp;',
 				// 2px is for border-top & border-bottom
-				cloneHeight = clone.css('width', $this.css('width')).html(textareaContent).outerHeight() + 2;
+				cloneHeight = clone.css('width', $this.css('width')).text(textareaContent).outerHeight() + 2;
 
 			// Default to having scrollbars
 			editor.css('overflow-y', 'auto');
@@ -179,8 +180,8 @@ jQuery(document).ready( function($) {
 				editorHeight = cloneHeight;
 			}
 
-			// No scrollbars as we change height
-			editor.css('overflow-y', 'hidden');
+			// No scrollbars as we change height, not for IE < 9
+			editor.css('overflow', 'hidden');
 
 			$this.css('height', editorHeight + 'px');
 		});
